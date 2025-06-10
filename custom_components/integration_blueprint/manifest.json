@@ -1,6 +1,6 @@
 {
   "domain": "textbelt-sms",
-  "name": "Integration blueprint",
+  "name": "textbelt-sms",
   "codeowners": [
     "@stroodle96"
   ],
