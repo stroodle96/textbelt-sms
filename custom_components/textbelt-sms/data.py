@@ -18,7 +18,7 @@ type IntegrationBlueprintConfigEntry = ConfigEntry[IntegrationBlueprintData]
 
 @dataclass
 class IntegrationBlueprintData:
-    """Data for the Blueprint integration."""
+    """Data for the textbelt-sms."""
 
     client: IntegrationBlueprintApiClient
     coordinator: BlueprintDataUpdateCoordinator

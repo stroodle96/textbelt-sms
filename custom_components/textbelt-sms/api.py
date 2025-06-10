@@ -1,101 +1,64 @@
-"""Sample API Client."""
+"""API client for Textbelt SMS service."""
 
 from __future__ import annotations
 
-import socket
 from typing import Any
 
 import aiohttp
-import async_timeout
 
 
-class IntegrationBlueprintApiClientError(Exception):
+class TextbeltApiClientError(Exception):
     """Exception to indicate a general API error."""
 
 
-class IntegrationBlueprintApiClientCommunicationError(
-    IntegrationBlueprintApiClientError,
-):
+class TextbeltApiClientCommunicationError(TextbeltApiClientError):
     """Exception to indicate a communication error."""
 
 
-class IntegrationBlueprintApiClientAuthenticationError(
-    IntegrationBlueprintApiClientError,
-):
+class TextbeltApiClientAuthenticationError(TextbeltApiClientError):
     """Exception to indicate an authentication error."""
 
 
-def _verify_response_or_raise(response: aiohttp.ClientResponse) -> None:
-    """Verify that the response is valid."""
-    if response.status in (401, 403):
-        msg = "Invalid credentials"
-        raise IntegrationBlueprintApiClientAuthenticationError(
-            msg,
-        )
-    response.raise_for_status()
+class TextbeltApiClient:
+    """API client for sending SMS via Textbelt."""
 
-
-class IntegrationBlueprintApiClient:
-    """Sample API Client."""
-
-    def __init__(
-        self,
-        username: str,
-        password: str,
-        session: aiohttp.ClientSession,
-    ) -> None:
-        """Sample API Client."""
-        self._username = username
-        self._password = password
+    def __init__(self, api_key: str, session: aiohttp.ClientSession) -> None:
+        """Initialize the client with API key and aiohttp session."""
+        self._api_key = api_key
         self._session = session
+        self._endpoint = "https://textbelt.com/text"
 
-    async def async_get_data(self) -> Any:
-        """Get data from the API."""
-        return await self._api_wrapper(
-            method="get",
-            url="https://jsonplaceholder.typicode.com/posts/1",
-        )
+    async def async_send_sms(self, phone: str, message: str) -> dict[str, Any]:
+        """
+        Send an SMS message using the Textbelt API.
 
-    async def async_set_title(self, value: str) -> Any:
-        """Get data from the API."""
-        return await self._api_wrapper(
-            method="patch",
-            url="https://jsonplaceholder.typicode.com/posts/1",
-            data={"title": value},
-            headers={"Content-type": "application/json; charset=UTF-8"},
-        )
+        Args:
+            phone: The recipient's phone number (international format recommended).
+            message: The SMS message text.
 
-    async def _api_wrapper(
-        self,
-        method: str,
-        url: str,
-        data: dict | None = None,
-        headers: dict | None = None,
-    ) -> Any:
-        """Get information from the API."""
+        Returns:
+            The JSON response from the API.
+
+        Raises:
+            TextbeltApiClientError: For general API errors.
+            TextbeltApiClientCommunicationError: For network errors.
+
+        """
+        payload = {
+            "phone": phone,
+            "message": message,
+            "key": self._api_key,
+        }
         try:
-            async with async_timeout.timeout(10):
-                response = await self._session.request(
-                    method=method,
-                    url=url,
-                    headers=headers,
-                    json=data,
-                )
-                _verify_response_or_raise(response)
-                return await response.json()
-
-        except TimeoutError as exception:
-            msg = f"Timeout error fetching information - {exception}"
-            raise IntegrationBlueprintApiClientCommunicationError(
-                msg,
-            ) from exception
-        except (aiohttp.ClientError, socket.gaierror) as exception:
-            msg = f"Error fetching information - {exception}"
-            raise IntegrationBlueprintApiClientCommunicationError(
-                msg,
-            ) from exception
-        except Exception as exception:  # pylint: disable=broad-except
-            msg = f"Something really wrong happened! - {exception}"
-            raise IntegrationBlueprintApiClientError(
-                msg,
-            ) from exception
+            async with self._session.post(self._endpoint, data=payload) as response:
+                data = await response.json()
+                if response.status == 401 or response.status == 403:
+                    msg = "Invalid API key or unauthorized."
+                    raise TextbeltApiClientAuthenticationError(msg)
+                if not data.get("success", False):
+                    msg = data.get("error", "Unknown error from Textbelt API.")
+                    raise TextbeltApiClientError(msg)
+                return data
+        except aiohttp.ClientError as err:
+            msg = f"Network error: {err}"
+            raise TextbeltApiClientCommunicationError(msg) from err
