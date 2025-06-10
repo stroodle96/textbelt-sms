@@ -2,7 +2,7 @@
 Custom integration to integrate textbelt-sms with Home Assistant.
 
 For more details about this integration, please refer to
-https://github.com/ludeeus/textbelt-sms
+https://github.com/stroodle96/textbelt-sms
 """
 
 from __future__ import annotations
