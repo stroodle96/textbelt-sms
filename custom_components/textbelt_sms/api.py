@@ -28,13 +28,16 @@ class TextbeltApiClient:
         self._session = session
         self._endpoint = "https://textbelt.com/text"
 
-    async def async_send_sms(self, phone: str, message: str) -> dict[str, Any]:
+    async def async_send_sms(
+        self, phone: str, message: str, webhook_url: str | None = None
+    ) -> dict[str, Any]:
         """
-        Send an SMS message using the Textbelt API.
+        Send an SMS message using the Textbelt API, optionally with a webhook URL for replies.
 
         Args:
             phone: The recipient's phone number (international format recommended).
             message: The SMS message text.
+            webhook_url: Optional webhook URL to receive SMS replies.
 
         Returns:
             The JSON response from the API.
@@ -49,6 +52,8 @@ class TextbeltApiClient:
             "message": message,
             "key": self._api_key,
         }
+        if webhook_url:
+            payload["webhookUrl"] = webhook_url
         try:
             async with self._session.post(self._endpoint, data=payload) as response:
                 data = await response.json()

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from homeassistant.components.webhook import async_register_webhook
+from homeassistant.components.webhook import async_unregister_webhook
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import TextbeltApiClient, TextbeltApiClientError
@@ -32,6 +34,9 @@ async def async_setup(hass: HomeAssistant, _: ConfigType) -> bool:
     return True
 
 
+WEBHOOK_ID = "textbelt_sms_reply"
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up the Textbelt SMS integration from a config entry."""
     LOGGER.debug("Setting up Textbelt SMS config entry")
@@ -43,20 +48,38 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         LOGGER.error("Failed to validate API key: %s", err)
         return False
 
+    async def handle_webhook(hass, webhook_id, request):
+        """Handle incoming webhook from Textbelt for SMS replies."""
+        data = await request.json()
+        LOGGER.info("Received SMS reply via webhook: %s", data)
+        # Fire a Home Assistant event for automations or further processing
+        hass.bus.async_fire("textbelt_sms_reply", data)
+
+    # Register the webhook endpoint
+    async_register_webhook(
+        hass,
+        DOMAIN,
+        "Textbelt SMS Reply Webhook",
+        WEBHOOK_ID,
+        handle_webhook,
+    )
+
     # Store the client for use in the service
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = client
 
     async def handle_send_sms(call: ServiceCall) -> None:
-        """Handle the service call to send an SMS using Textbelt."""
+        """Handle the send_sms service call to send an SMS using Textbelt."""
         LOGGER.debug("Handling send_sms service call")
         phone = call.data.get("phone")
         message = call.data.get("message")
+        # Construct the public webhook URL (user must expose HA to the internet)
+        webhook_url = f"{hass.config.api.base_url}/api/webhook/{WEBHOOK_ID}"
         if not phone or not message:
             LOGGER.error("Phone and message must be provided to send_sms service")
             return
 
         try:
-            result = await client.async_send_sms(phone, message)
+            result = await client.async_send_sms(phone, message, webhook_url)
         except TextbeltApiClientError as err:
             LOGGER.error("Error while sending SMS: %s", err)
             return
@@ -73,9 +96,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry and remove the client."""
+    """Unload a config entry and unregister the webhook."""
     LOGGER.debug("Unloading Textbelt SMS config entry")
     hass.data[DOMAIN].pop(entry.entry_id, None)
+    async_unregister_webhook(hass, WEBHOOK_ID)
     return True
 
 
