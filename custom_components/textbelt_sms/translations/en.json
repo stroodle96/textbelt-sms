@@ -1,0 +1,20 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "description": "Enter your Textbelt API key. If you need help, visit: https://docs.textbelt.com/",
+                "data": {
+                    "api_key": "API Key"
+                }
+            }
+        },
+        "error": {
+            "api_key": "Invalid or missing API key.",
+            "connection": "Unable to connect to Textbelt API.",
+            "unknown": "Unknown error occurred."
+        },
+        "abort": {
+            "already_configured": "Textbelt SMS is already configured."
+        }
+    }
+}
