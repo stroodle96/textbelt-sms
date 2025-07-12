@@ -97,3 +97,17 @@ class TextbeltApiClient:
         except aiohttp.ClientError as err:
             msg = f"Network error: {err}"
             raise TextbeltApiClientCommunicationError(msg) from err
+
+    async def async_check_status(self, text_id: str) -> dict[str, Any]:
+        """Check the status of a sent SMS message."""
+        status_endpoint = f"https://textbelt.com/status/{text_id}"
+        try:
+            async with self._session.get(status_endpoint) as response:
+                data = await response.json()
+                if response.status != 200:  # noqa: PLR2004
+                    msg = data.get("error", "Unknown error from Textbelt status API.")
+                    raise TextbeltApiClientError(msg)
+                return data
+        except aiohttp.ClientError as err:
+            msg = f"Network error: {err}"
+            raise TextbeltApiClientCommunicationError(msg) from err

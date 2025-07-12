@@ -6,6 +6,7 @@ from contextlib import suppress
 from typing import TYPE_CHECKING
 
 from homeassistant.components import webhook
+from homeassistant.const import Platform
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import TextbeltApiClient, TextbeltApiClientError
@@ -16,6 +17,8 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant, ServiceCall
     from homeassistant.helpers.typing import ConfigType
+
+PLATFORMS: list[Platform] = [Platform.SENSOR]
 
 
 def _validate_api_key(api_key: str | None) -> str:
@@ -49,6 +52,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         LOGGER.error("Failed to validate API key: %s", err)
         return False
 
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN][entry.entry_id] = client
+
+    # Load platforms (sensors)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
     async def handle_webhook(
         hass: HomeAssistant,
         _webhook_id: str,  # underscore prefix indicates intentionally unused
@@ -74,9 +83,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except ValueError as err:
         LOGGER.error("Failed to register webhook: %s", err)
         return False
-
-    # Store the client for use in the service
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = client
 
     async def handle_send_sms(call: ServiceCall) -> None:
         """Handle the send_sms service call to send an SMS using Textbelt."""
@@ -118,10 +124,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry and unregister the webhook."""
     LOGGER.debug("Unloading Textbelt SMS config entry")
-    hass.data[DOMAIN].pop(entry.entry_id, None)
-    with suppress(ValueError):
-        webhook.async_unregister(hass, WEBHOOK_ID)
-    return True
+
+    # Unload platforms
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+    if unload_ok:
+        hass.data[DOMAIN].pop(entry.entry_id, None)
+        with suppress(ValueError):
+            webhook.async_unregister(hass, WEBHOOK_ID)
+
+    return unload_ok
 
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
