@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 from typing import TYPE_CHECKING
 
 from homeassistant.components import webhook
@@ -57,6 +58,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         data = await request.json()
         LOGGER.info("Received SMS reply via webhook: %s", data)
         hass.bus.async_fire("textbelt_sms_reply", data)
+
+    # Ensure any existing webhook is unregistered first
+    with suppress(ValueError):
+        webhook.async_unregister(hass, WEBHOOK_ID)
 
     try:
         webhook.async_register(
@@ -114,7 +119,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry and unregister the webhook."""
     LOGGER.debug("Unloading Textbelt SMS config entry")
     hass.data[DOMAIN].pop(entry.entry_id, None)
-    webhook.async_unregister(hass, WEBHOOK_ID)
+    with suppress(ValueError):
+        webhook.async_unregister(hass, WEBHOOK_ID)
     return True
 
 
