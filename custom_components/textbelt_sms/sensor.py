@@ -54,6 +54,8 @@ class LastMessageStatusSensor(SensorEntity):
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:message-text"
+    # Enable polling for regular status updates
+    _attr_should_poll = True
 
     def __init__(
         self,
@@ -102,6 +104,7 @@ class LastMessageStatusSensor(SensorEntity):
                     ATTR_RESPONSE: status,
                 }
             )
+            LOGGER.debug("Updated sensor status: %s", self._attr_native_value)
         except TextbeltApiClientError as err:
             LOGGER.error("Error checking SMS status: %s", err)
             self._attr_native_value = "failed"
@@ -112,11 +115,14 @@ class LastMessageStatusSensor(SensorEntity):
         LOGGER.debug("Setting new text ID: %s", text_id)
         self._last_text_id = text_id
         self._attr_extra_state_attributes[ATTR_TEXT_ID] = text_id
+        if text_id:
+            self._attr_native_value = "pending"  # Set initial status
         self.async_schedule_update_ha_state(force_refresh=True)
 
     @callback
     def update_message_info(self, phone: str, message: str) -> None:
         """Update the message information displayed in attributes."""
+        LOGGER.debug("Updating message info - phone: %s", phone)
         self._attr_extra_state_attributes.update(
             {
                 ATTR_PHONE: phone,

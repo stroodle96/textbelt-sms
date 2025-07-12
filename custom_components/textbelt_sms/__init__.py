@@ -108,10 +108,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if result.get("success"):
             LOGGER.info("SMS sent successfully to %s", phone)
             text_id = result.get("textId")
-            # Find and update the Last Message Status sensor with the new textId
-            for entity in hass.data[DOMAIN].get("entities", []):
-                if hasattr(entity, "set_last_text_id"):
-                    entity.set_last_text_id(text_id)
+            # Find the sensor entity and update it
+            entity_reg = hass.helpers.entity_registry.async_get(hass)
+            sensor_entity_id = f"sensor.{DOMAIN}_last_message_status"
+            sensor = entity_reg.async_get(sensor_entity_id)
+
+            if sensor:
+                # Get the actual entity object
+                sensor_state = hass.states.get(sensor.entity_id)
+                if sensor_state:
+                    for entity in hass.data[DOMAIN].get("entities", []):
+                        if entity.entity_id == sensor.entity_id:
+                            LOGGER.debug("Updating sensor with text_id: %s", text_id)
+                            entity.set_last_text_id(text_id)
+                            entity.update_message_info(phone, message)
+                            break
         else:
             LOGGER.error("Failed to send SMS: %s", result.get("error"))
 
