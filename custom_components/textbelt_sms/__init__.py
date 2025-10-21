@@ -5,10 +5,8 @@ from __future__ import annotations
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
-from homeassistant.components.webhook import (
-    async_register_webhook,
-    async_unregister_webhook,
-)
+from homeassistant.components import webhook
+from homeassistant.const import Platform
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import TextbeltApiClient, TextbeltApiClientError
@@ -85,6 +83,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except ValueError as err:
         LOGGER.error("Failed to register webhook: %s", err)
         return False
+
+    hass.data[DOMAIN][entry.entry_id] = client
 
     async def handle_send_sms(call: ServiceCall) -> None:
         """Handle the send_sms service call to send an SMS using Textbelt."""
