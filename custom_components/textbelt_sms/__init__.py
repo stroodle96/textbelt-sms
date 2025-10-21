@@ -5,8 +5,10 @@ from __future__ import annotations
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
-from homeassistant.components import webhook
-from homeassistant.const import Platform
+from homeassistant.components.webhook import (
+    async_register_webhook,
+    async_unregister_webhook,
+)
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import TextbeltApiClient, TextbeltApiClientError
@@ -52,18 +54,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         LOGGER.error("Failed to validate API key: %s", err)
         return False
 
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = client
-
-    # Load platforms (sensors)
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
     async def handle_webhook(
         hass: HomeAssistant,
-        _webhook_id: str,  # underscore prefix indicates intentionally unused
+        _webhook_id: str,
         request: web.Request,
     ) -> None:
-        """Handle incoming webhook from Textbelt for SMS replies."""
+        """
+        Handle incoming webhook from Textbelt for SMS replies.
+
+        The webhook handler receives the Home Assistant instance, the webhook id
+        (unused, prefixed with an underscore) and the aiohttp request.
+
+        """
         data = await request.json()
         LOGGER.info("Received SMS reply via webhook: %s", data)
         hass.bus.async_fire("textbelt_sms_reply", data)
@@ -91,10 +93,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         message = call.data.get("message")
 
         # Construct the public webhook URL (user must expose HA to the internet)
-        webhook_url = None
-        if hass.config.external_url:
-            webhook_url = f"{hass.config.external_url}/api/webhook/{WEBHOOK_ID}"
-
+        base_url = getattr(hass.config.api, "base_url", "")
+        webhook_url = f"{base_url}/api/webhook/{WEBHOOK_ID}"
         if not phone or not message:
             LOGGER.error("Phone and message must be provided to send_sms service")
             return
