@@ -4,14 +4,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from homeassistant.components.webhook import async_register_webhook
-from homeassistant.components.webhook import async_unregister_webhook
+from homeassistant.components.webhook import (
+    async_register_webhook,
+    async_unregister_webhook,
+)
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import TextbeltApiClient, TextbeltApiClientError
 from .const import DOMAIN, LOGGER
 
 if TYPE_CHECKING:
+    from aiohttp import web
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant, ServiceCall
     from homeassistant.helpers.typing import ConfigType
@@ -48,8 +51,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         LOGGER.error("Failed to validate API key: %s", err)
         return False
 
-    async def handle_webhook(hass, webhook_id, request):
-        """Handle incoming webhook from Textbelt for SMS replies."""
+    async def handle_webhook(
+        hass: HomeAssistant,
+        _webhook_id: str,
+        request: web.Request,
+    ) -> None:
+        """
+        Handle incoming webhook from Textbelt for SMS replies.
+
+        The webhook handler receives the Home Assistant instance, the webhook id
+        (unused, prefixed with an underscore) and the aiohttp request.
+
+        """
         data = await request.json()
         LOGGER.info("Received SMS reply via webhook: %s", data)
         # Fire a Home Assistant event for automations or further processing
@@ -73,7 +86,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         phone = call.data.get("phone")
         message = call.data.get("message")
         # Construct the public webhook URL (user must expose HA to the internet)
-        webhook_url = f"{hass.config.api.base_url}/api/webhook/{WEBHOOK_ID}"
+        base_url = getattr(hass.config.api, "base_url", "")
+        webhook_url = f"{base_url}/api/webhook/{WEBHOOK_ID}"
         if not phone or not message:
             LOGGER.error("Phone and message must be provided to send_sms service")
             return
