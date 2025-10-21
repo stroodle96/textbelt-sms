@@ -6,7 +6,6 @@ from http import HTTPStatus
 from typing import Any
 
 import aiohttp
-from sqlalchemy import false
 
 
 class TextbeltApiClientError(Exception):
@@ -92,7 +91,7 @@ class TextbeltApiClient:
                 if response.status in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}:
                     msg = "Invalid API key or unauthorized."
                     raise TextbeltApiClientAuthenticationError(msg)
-                if not data.get("success", false):
+                if not data.get("success", False):
                     msg = data.get("error", "Unknown error from Textbelt API.")
                     raise TextbeltApiClientError(msg)
                 return data
