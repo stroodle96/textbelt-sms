@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from typing import Any
 
 import aiohttp
@@ -32,10 +33,13 @@ class TextbeltApiClient:
         self, phone: str, message: str, webhook_url: str | None = None
     ) -> dict[str, Any]:
         """
-        Send an SMS message using the Textbelt API, optionally with a webhook URL for replies.
+        Send an SMS message using the Textbelt API.
+
+        Optionally include a webhook URL for replies.
 
         Args:
-            phone: The recipient's phone number (international format recommended).
+            phone: The recipient's phone number (international format
+                recommended).
             message: The SMS message text.
             webhook_url: Optional webhook URL to receive SMS replies.
 
@@ -57,7 +61,7 @@ class TextbeltApiClient:
         try:
             async with self._session.post(self._endpoint, data=payload) as response:
                 data = await response.json()
-                if response.status == 401 or response.status == 403:
+                if response.status in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}:
                     msg = "Invalid API key or unauthorized."
                     raise TextbeltApiClientAuthenticationError(msg)
                 if not data.get("success", False):
