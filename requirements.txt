@@ -1,4 +1,10 @@
 colorlog==6.10.1
 homeassistant==2025.2.4
 pip>=21.3.1
+<<<<<<< HEAD
+pytest==8.2.2
+pytest-homeassistant-custom-component==0.13.122
+ruff==0.14.1
+=======
 ruff==0.14.7
+>>>>>>> 8df06a0f8b5c7cb6c01a489f65680707c28ce4da
