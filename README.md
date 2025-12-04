@@ -104,6 +104,13 @@ Check Home Assistant logs for detailed error messages. Common issues:
 - Invalid phone number format
 - API quota exceeded
 
+## Testing
+
+This repository ships with a pytest suite powered by
+[`pytest-homeassistant-custom-component`](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component).
+Install the developer requirements and run `pytest` from the project root to exercise
+the config flow and service layers without starting Home Assistant.
+
 ## Support
 
 - Report issues on [GitHub](https://github.com/stroodle96/textbelt-sms/issues)
