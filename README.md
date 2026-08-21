@@ -96,6 +96,16 @@ automation:
 - **Testing**: Use `textbelt` as your API key (limited to 1 message)
 - **Pay-as-you-go**: Purchase credits from [Textbelt](https://textbelt.com/)
 
+## Testing
+
+To run the automated test suite locally:
+
+1. Create and activate a virtual environment.
+2. Install dependencies using `pip install -r requirements.txt -r requirements_test.txt`.
+3. Execute the test suite with `pytest`.
+
+The tests rely on `pytest-homeassistant-custom-component`, which provides test fixtures for spinning up a lightweight Home Assistant instance and mocking HTTP calls to the Textbelt API.
+
 ## Troubleshooting
 
 Check Home Assistant logs for detailed error messages. Common issues:
