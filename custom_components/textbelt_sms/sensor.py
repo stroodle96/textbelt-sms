@@ -130,7 +130,7 @@ class LastMessageStatusSensor(
     @property
     def available(self) -> bool:
         """Go unavailable while a transient status refresh is failing."""
-        return super().available and self.coordinator.last_update_success is not False
+        return self.coordinator.last_update_success is not False
 
     @property
     def extra_state_attributes(self) -> dict[str, str | None]:

@@ -101,3 +101,13 @@ async def test_sensor_exposes_required_detail_attributes(hass: HomeAssistant) ->
     }
     assert sensor.state_class is None
     await coordinator.async_shutdown()
+
+
+async def test_sensor_starts_as_available_unknown(hass: HomeAssistant) -> None:
+    """Expose unknown before the first message is sent."""
+    coordinator = TextbeltStatusCoordinator(hass, FakeClient({}))
+    sensor = LastMessageStatusSensor(coordinator, _entry())
+
+    assert sensor.native_value == MessageStatus.UNKNOWN
+    assert sensor.available is True
+    await coordinator.async_shutdown()
