@@ -1,5 +1,6 @@
 """Tests for the Textbelt SMS config flow."""
 
+import pytest
 from homeassistant.const import CONF_API_KEY
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -22,9 +23,12 @@ async def test_user_form(hass: HomeAssistant) -> None:
     }
 
 
-def test_config_schema_is_config_entry_only() -> None:
+def test_config_schema_is_config_entry_only(caplog: pytest.LogCaptureFixture) -> None:
     """Reject YAML configuration because this integration uses config entries."""
     assert CONFIG_SCHEMA({}) == {}
+    yaml_config = {DOMAIN: {"api_key": "not-accepted-from-yaml"}}
+    assert CONFIG_SCHEMA(yaml_config) == yaml_config
+    assert "does not support YAML setup" in caplog.text
 
 
 async def test_user_form_rejects_missing_api_key(hass: HomeAssistant) -> None:

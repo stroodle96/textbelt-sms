@@ -41,9 +41,11 @@ def wait_for_ha(base: str) -> None:
     """Wait until HA's HTTP/onboarding stack is responding."""
     for _ in range(90):
         try:
-            call(f"{base}/api/onboarding")
+            onboarding = call(f"{base}/api/onboarding")
+            if isinstance(onboarding, dict):
+                return
         except error.HTTPError:
-            return
+            pass
         except OSError:
             pass
         else:
