@@ -18,6 +18,7 @@ from custom_components.textbelt_sms import (
     async_unload_entry,
 )
 from custom_components.textbelt_sms.const import DOMAIN, EVENT_REPLY
+from custom_components.textbelt_sms.sensor import LastMessage, MessageStatus
 
 
 class _Response:
@@ -29,8 +30,8 @@ class _Response:
     async def __aexit__(self, *_args: object) -> None:
         return None
 
-    async def json(self) -> dict[str, bool]:
-        return {"success": True}
+    async def json(self) -> dict[str, bool | str]:
+        return {"success": True, "textId": "abc"}
 
 
 class _FailureResponse(_Response):
@@ -58,6 +59,17 @@ def _entry() -> MockConfigEntry:
         title="Textbelt SMS",
         data={CONF_API_KEY: "test-key"},
         entry_id="test-entry",
+    )
+
+
+@pytest.fixture(autouse=True)
+def mock_platform_forwarding(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep direct setup tests focused on integration lifecycle callbacks."""
+    monkeypatch.setattr(hass.config_entries, "async_forward_entry_setups", AsyncMock())
+    monkeypatch.setattr(
+        hass.config_entries, "async_unload_platforms", AsyncMock(return_value=True)
     )
 
 
@@ -95,6 +107,13 @@ async def test_setup_registers_service_and_stores_client(
             },
         )
     ]
+    assert entry.runtime_data.coordinator.data == LastMessage(
+        text_id="abc",
+        phone="+15551234567",
+        message="hello",
+        status=MessageStatus.PENDING,
+    )
+    await entry.runtime_data.coordinator.async_shutdown()
 
 
 async def test_service_rejects_empty_values(
@@ -111,6 +130,7 @@ async def test_service_rejects_empty_values(
         await hass.services.async_call(
             DOMAIN, SERVICE_SEND_SMS, {"phone": "+1", "message": ""}, blocking=True
         )
+    await entry.runtime_data.coordinator.async_shutdown()
 
 
 async def test_service_exposes_textbelt_failure_as_homeassistant_error(
@@ -121,12 +141,14 @@ async def test_service_exposes_textbelt_failure_as_homeassistant_error(
         "custom_components.textbelt_sms.async_get_clientsession",
         lambda _: _FailureSession(),
     )
-    await async_setup_entry(hass, _entry())
+    entry = _entry()
+    await async_setup_entry(hass, entry)
 
     with pytest.raises(HomeAssistantError):
         await hass.services.async_call(
             DOMAIN, SERVICE_SEND_SMS, {"phone": "+1", "message": "hello"}, blocking=True
         )
+    await entry.runtime_data.coordinator.async_shutdown()
 
 
 async def test_unload_removes_service_webhook_and_client(
@@ -163,6 +185,7 @@ async def test_reload_replaces_service_and_client(
 
     assert hass.services.has_service(DOMAIN, SERVICE_SEND_SMS)
     assert entry.runtime_data is not None
+    await entry.runtime_data.coordinator.async_shutdown()
 
 
 async def test_reply_webhook_fires_event_without_logging_payload(
@@ -191,3 +214,4 @@ async def test_reply_webhook_fires_event_without_logging_payload(
     await hass.async_block_till_done()
 
     assert events == [{"from": "+1", "text": "reply"}]
+    await entry.runtime_data.coordinator.async_shutdown()

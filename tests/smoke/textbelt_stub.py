@@ -11,6 +11,7 @@ from urllib.parse import parse_qs
 
 REQUESTS = Path(os.getenv("TEXTBELT_STUB_REQUESTS", "textbelt-requests.json"))
 MODE = REQUESTS.with_name("mode")
+STATUS = REQUESTS.with_name("status")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -27,6 +28,12 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/mode":
             self._send(200, {"mode": self._mode()})
             return
+        if self.path == "/status":
+            self._send(200, {"status": self._status()})
+            return
+        if self.path.startswith("/status/"):
+            self._send(200, {"success": True, "status": self._status()})
+            return
         self._send(404, {})
 
     def do_POST(self) -> None:
@@ -42,6 +49,10 @@ class Handler(BaseHTTPRequestHandler):
             )
             self._send(200, {"ok": True})
             return
+        if self.path in {"/status/pending", "/status/delivered", "/status/failed"}:
+            STATUS.write_text(self.path.rsplit("/", 1)[-1], encoding="utf-8")
+            self._send(200, {"ok": True})
+            return
         if self.path != "/text":
             self._send(404, {})
             return
@@ -53,7 +64,10 @@ class Handler(BaseHTTPRequestHandler):
         REQUESTS.write_text(json.dumps(requests), encoding="utf-8")
         self._send(
             200,
-            {"success": self._mode() == "success"},
+            {
+                "success": self._mode() == "success",
+                "textId": f"stub-text-{len(requests)}",
+            },
         )
 
     def _read(self) -> list[dict[str, str]]:
@@ -63,6 +77,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def _mode(self) -> str:
         return MODE.read_text(encoding="utf-8") if MODE.exists() else "success"
+
+    def _status(self) -> str:
+        return STATUS.read_text(encoding="utf-8") if STATUS.exists() else "pending"
 
     def _send(self, status: int, payload: dict) -> None:
         body = json.dumps(payload).encode("utf-8")
@@ -80,4 +97,5 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     REQUESTS.write_text("[]", encoding="utf-8")
     MODE.write_text("success", encoding="utf-8")
+    STATUS.write_text("pending", encoding="utf-8")
     HTTPServer(("0.0.0.0", int(os.getenv("PORT", "8080"))), Handler).serve_forever()  # noqa: S104

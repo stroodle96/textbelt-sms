@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 from http import HTTPStatus
 from typing import Any
+from urllib.parse import quote
 
 import aiohttp
 
@@ -82,6 +83,33 @@ class TextbeltApiClient:
                 if not data.get("success", False):
                     msg = data.get("error", "Unknown error from Textbelt API.")
                     raise TextbeltApiClientError(str(msg))
+                return data
+        except (aiohttp.ClientError, TimeoutError) as err:
+            msg = f"Network error: {err}"
+            raise TextbeltApiClientCommunicationError(msg) from err
+    async def async_get_status(self, text_id: str) -> dict[str, Any]:
+        """Return the delivery status for a previously sent message."""
+        base_url = self._endpoint.removesuffix("/text")
+        endpoint = f"{base_url}/status/{quote(text_id, safe='')}"
+        try:
+            async with self._session.get(
+                endpoint, params={"key": self._api_key}
+            ) as response:
+                if response.status in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}:
+                    raise TextbeltApiClientAuthenticationError(AUTHENTICATION_ERROR)
+                if response.status >= HTTPStatus.BAD_REQUEST:
+                    msg = f"Textbelt API returned HTTP {response.status}."
+                    raise TextbeltApiClientError(msg)
+                try:
+                    data = await response.json()
+                except (aiohttp.ClientError, TypeError, ValueError) as err:
+                    raise TextbeltApiClientError(INVALID_RESPONSE_ERROR) from err
+                if not isinstance(data, dict):
+                    raise TextbeltApiClientError(INVALID_RESPONSE_ERROR)
+                if not data.get("success", False):
+                    raise TextbeltApiClientError(
+                        str(data.get("error", "Unknown error from Textbelt API."))
+                    )
                 return data
         except (aiohttp.ClientError, TimeoutError) as err:
             msg = f"Network error: {err}"

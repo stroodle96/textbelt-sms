@@ -29,6 +29,15 @@ def _session(response: MagicMock) -> MagicMock:
     return session
 
 
+def _get_session(response: MagicMock) -> MagicMock:
+    request = MagicMock()
+    request.__aenter__ = AsyncMock(return_value=response)
+    request.__aexit__ = AsyncMock(return_value=None)
+    session = MagicMock()
+    session.get.return_value = request
+    return session
+
+
 @pytest.mark.asyncio
 async def test_send_sms_posts_exact_payload_with_webhook(api_base_url: str) -> None:
     """Post the expected payload, including the optional reply webhook."""
@@ -152,3 +161,43 @@ async def test_send_sms_raises_error_for_malformed_json() -> None:
         await TextbeltApiClient("secret", _session(response)).async_send_sms(
             "+1", "hello"
         )
+@pytest.mark.asyncio
+async def test_get_status_posts_exact_payload(api_base_url: str) -> None:
+    """Fetch one message status with the key in the query payload."""
+    response = _response(200, {"success": True, "status": "DELIVERED"})
+    session = _get_session(response)
+
+    result = await TextbeltApiClient("secret", session).async_get_status("abc")
+
+    assert result == {"success": True, "status": "DELIVERED"}
+    session.get.assert_called_once_with(
+        f"{api_base_url}/status/abc", params={"key": "secret"}
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_status_rejects_provider_failure() -> None:
+    """Treat a provider-declared status failure as an API error."""
+    response = _response(200, {"success": False, "error": "not found"})
+
+    with pytest.raises(TextbeltApiClientError, match="not found"):
+        await TextbeltApiClient("secret", _get_session(response)).async_get_status(
+            "abc"
+        )
+
+
+@pytest.mark.asyncio
+async def test_get_status_raises_for_auth_and_malformed_json() -> None:
+    """Classify status authentication and response decoding failures."""
+    auth_response = _response(401, {"success": False})
+    with pytest.raises(TextbeltApiClientAuthenticationError):
+        await TextbeltApiClient("secret", _get_session(auth_response)).async_get_status(
+            "abc"
+        )
+
+    malformed_response = MagicMock(status=200)
+    malformed_response.json = AsyncMock(side_effect=ValueError("not json"))
+    with pytest.raises(TextbeltApiClientError, match="invalid response"):
+        await TextbeltApiClient(
+            "secret", _get_session(malformed_response)
+        ).async_get_status("abc")

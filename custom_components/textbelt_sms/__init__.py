@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import voluptuous as vol
@@ -12,13 +13,14 @@ from homeassistant.components.webhook import (
 from homeassistant.components.webhook import (
     async_unregister as async_unregister_webhook,
 )
-from homeassistant.const import CONF_API_KEY
+from homeassistant.const import CONF_API_KEY, Platform
 from homeassistant.core import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import TextbeltApiClient, TextbeltApiClientError
-from .const import DOMAIN, EVENT_REPLY, LOGGER, SERVICE_SEND_SMS
+from .const import DOMAIN, EVENT_REPLY, LOGGER, SERVICE_SEND_SMS, WEBHOOK_ID
+from .sensor import TextbeltStatusCoordinator
 
 if TYPE_CHECKING:
     from aiohttp import web
@@ -37,6 +39,7 @@ SERVICE_SCHEMA = vol.Schema(
 MISSING_FIELDS_ERROR = "Phone and message are required"
 SEND_ERROR = "Unable to send SMS via Textbelt"
 FAILED_SEND_ERROR = "Textbelt did not send the SMS"
+MISSING_TEXT_ID_ERROR = "Textbelt response did not include a text ID"
 
 
 def _validate_api_key(api_key: str | None) -> str:
@@ -56,7 +59,15 @@ async def async_setup(hass: HomeAssistant, _: ConfigType) -> bool:
     return True
 
 
-WEBHOOK_ID = "textbelt_sms_reply"
+PLATFORMS = [Platform.SENSOR]
+
+
+@dataclass
+class TextbeltRuntimeData:
+    """Runtime objects owned by one Textbelt config entry."""
+
+    client: TextbeltApiClient
+    coordinator: TextbeltStatusCoordinator
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -99,7 +110,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # same typed lifecycle state.  The service closure below deliberately
     # captures this instance instead of looking it up through the entity
     # registry or a second mutable store.
-    entry.runtime_data = client
+    coordinator = TextbeltStatusCoordinator(hass, client)
+    entry.runtime_data = TextbeltRuntimeData(client, coordinator)
 
     async def handle_send_sms(call: ServiceCall) -> None:
         """Handle the send_sms service call to send an SMS using Textbelt."""
@@ -120,6 +132,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             raise HomeAssistantError(SEND_ERROR) from err
 
         if result.get("success"):
+            text_id = result.get("textId")
+            if not isinstance(text_id, str) or not text_id:
+                raise HomeAssistantError(MISSING_TEXT_ID_ERROR)
+            coordinator.set_last_message(text_id, phone, message)
+            hass.async_create_task(coordinator.async_request_refresh())
             return
         raise HomeAssistantError(FAILED_SEND_ERROR)
 
@@ -128,12 +145,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.services.async_register(
         DOMAIN, SERVICE_SEND_SMS, handle_send_sms, schema=SERVICE_SCHEMA
     )
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry and unregister the webhook."""
     LOGGER.debug("Unloading Textbelt SMS config entry")
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if not unload_ok:
+        return False
+    if entry.runtime_data is not None:
+        await entry.runtime_data.coordinator.async_shutdown()
     entry.runtime_data = None
     hass.services.async_remove(DOMAIN, SERVICE_SEND_SMS)
     async_unregister_webhook(hass, WEBHOOK_ID)
