@@ -56,15 +56,17 @@ python3 -m pip install -r requirements_test.txt
 python3 -m pytest
 ```
 
-The real-Home-Assistant smoke harness starts Home Assistant 2026.8.2 alongside a
-deterministic local Textbelt stub. It never sends an SMS. Set `HA_TOKEN` to a test
-Home Assistant token and run:
+The real-Home-Assistant smoke harness starts a fresh Home Assistant 2026.8.2
+alongside a deterministic local Textbelt stub. It creates its own temporary Home
+Assistant user through the onboarding API, so no token or repository secret is
+needed. It never sends an SMS. Run:
 
 ```bash
-HA_TOKEN=... bash tests/smoke/run.sh
+bash tests/smoke/run.sh
 ```
 
-The harness requires Docker and always writes `tests/smoke/ha-smoke.log` when it exits.
+The harness requires Docker and preserves Compose state, HA/stub logs, requests,
+configuration, and a smoke report in a temporary `textbelt-ha-artifacts-*` directory when it exits.
 
 This custom component is based on [integration_blueprint template](https://github.com/ludeeus/integration_blueprint).
 

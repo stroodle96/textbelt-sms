@@ -22,11 +22,11 @@ services:
       textbelt:
         condition: service_healthy
     environment:
-      TEXTBELT_SMS_API_BASE_URL: http://textbelt:8080
+      TEXTBELT_SMS_API_BASE_URL: ${TEXTBELT_SMS_API_BASE_URL:-http://textbelt:8080}
     ports:
       - "8123:8123"
     volumes:
-      - ./ha-config:/config
+      - ${HA_CONFIG_DIR:-./ha-config}:/config
       - ../../custom_components/textbelt_sms:/config/custom_components/textbelt_sms:ro
 
 volumes:

@@ -10,15 +10,28 @@ permissions:
 
 jobs:
   live:
+    if: ${{ github.ref == 'refs/heads/main' }}
     environment: textbelt-live-smoke
     runs-on: ubuntu-latest
-    env:
-      TEXTBELT_API_KEY: ${{ secrets.TEXTBELT_API_KEY_test }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Verify protected key is present (no SMS is sent)
-        if: ${{ github.event_name != 'pull_request' && env.TEXTBELT_API_KEY != '' }}
+      - name: Run protected Textbelt _test smoke through HA
+        if: ${{ secrets.TEXTBELT_API_KEY_test != '' }}
+        env:
+          TEXTBELT_API_KEY: ${{ secrets.TEXTBELT_API_KEY_test }}
+          TEXTBELT_SMS_API_BASE_URL: https://textbelt.com
+          LIVE_SMOKE: "1"
         run: |
-          test -n "$TEXTBELT_API_KEY"
-          echo "Protected live smoke is configured; SMS send is intentionally skipped."
+          case "$TEXTBELT_API_KEY" in
+            *_test) ;;
+            *) echo "The protected Textbelt key must use the _test suffix." >&2; exit 2 ;;
+          esac
+          bash tests/smoke/run.sh
+      - name: Upload live smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.2
+        with:
+          name: textbelt-live-smoke
+          path: /tmp/textbelt-ha-artifacts-*/
+          if-no-files-found: warn

@@ -1,5 +1,6 @@
 """Tests for Home Assistant setup and service behavior."""
 
+from typing import Self
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -11,8 +12,8 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.textbelt_sms import (
     SERVICE_SEND_SMS,
     WEBHOOK_ID,
-    async_setup_entry,
     async_reload_entry,
+    async_setup_entry,
     async_unload_entry,
 )
 from custom_components.textbelt_sms.const import DOMAIN, EVENT_REPLY
@@ -21,7 +22,7 @@ from custom_components.textbelt_sms.const import DOMAIN, EVENT_REPLY
 class _Response:
     status = 200
 
-    async def __aenter__(self) -> "_Response":
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, *_args: object) -> None:
@@ -62,6 +63,7 @@ def _entry() -> MockConfigEntry:
 async def test_setup_registers_service_and_stores_client(
     hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch, api_base_url: str
 ) -> None:
+    """Set up the integration and exercise its public service."""
     session = _Session()
     monkeypatch.setattr(
         "custom_components.textbelt_sms.async_get_clientsession", lambda _: session
@@ -97,6 +99,7 @@ async def test_setup_registers_service_and_stores_client(
 async def test_service_rejects_empty_values(
     hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Reject service calls with empty required fields."""
     monkeypatch.setattr(
         "custom_components.textbelt_sms.async_get_clientsession", lambda _: _Session()
     )
@@ -112,6 +115,7 @@ async def test_service_rejects_empty_values(
 async def test_service_exposes_textbelt_failure_as_homeassistant_error(
     hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Translate a Textbelt failure into a Home Assistant error."""
     monkeypatch.setattr(
         "custom_components.textbelt_sms.async_get_clientsession",
         lambda _: _FailureSession(),
@@ -127,8 +131,13 @@ async def test_service_exposes_textbelt_failure_as_homeassistant_error(
 async def test_unload_removes_service_webhook_and_client(
     hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Unload the entry and remove all global runtime registrations."""
     monkeypatch.setattr(
         "custom_components.textbelt_sms.async_get_clientsession", lambda _: _Session()
+    )
+    unregister = MagicMock()
+    monkeypatch.setattr(
+        "custom_components.textbelt_sms.async_unregister_webhook", unregister
     )
     entry = _entry()
     await async_setup_entry(hass, entry)
@@ -136,11 +145,13 @@ async def test_unload_removes_service_webhook_and_client(
     assert await async_unload_entry(hass, entry)
     assert not hass.services.has_service(DOMAIN, SERVICE_SEND_SMS)
     assert entry.runtime_data is None
+    unregister.assert_called_once_with(hass, WEBHOOK_ID)
 
 
 async def test_reload_replaces_service_and_client(
     hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Reload the entry and recreate its service and runtime client."""
     monkeypatch.setattr(
         "custom_components.textbelt_sms.async_get_clientsession", lambda _: _Session()
     )
@@ -156,6 +167,7 @@ async def test_reload_replaces_service_and_client(
 async def test_reply_webhook_fires_event_without_logging_payload(
     hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Dispatch reply webhook payloads as Home Assistant events."""
     captured: dict[str, object] = {}
 
     def register(*args: object) -> None:

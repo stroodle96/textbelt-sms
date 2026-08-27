@@ -4,10 +4,12 @@ from homeassistant.const import CONF_API_KEY
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.textbelt_sms import CONFIG_SCHEMA
 from custom_components.textbelt_sms.const import DOMAIN
 
 
 async def test_user_form(hass: HomeAssistant) -> None:
+    """Show the initial config form."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": "user"}
     )
@@ -15,9 +17,18 @@ async def test_user_form(hass: HomeAssistant) -> None:
     assert result["type"] == "form"
     assert result["step_id"] == "user"
     assert result["errors"] == {}
+    assert result["description_placeholders"] == {
+        "docs_url": "https://docs.textbelt.com/"
+    }
+
+
+def test_config_schema_is_config_entry_only() -> None:
+    """Reject YAML configuration because this integration uses config entries."""
+    assert CONFIG_SCHEMA({}) == {}
 
 
 async def test_user_form_rejects_missing_api_key(hass: HomeAssistant) -> None:
+    """Reject an empty API key."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": "user"}
     )
@@ -30,6 +41,7 @@ async def test_user_form_rejects_missing_api_key(hass: HomeAssistant) -> None:
 
 
 async def test_user_form_creates_entry(hass: HomeAssistant) -> None:
+    """Create an entry from a valid API key."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": "user"}
     )
@@ -43,6 +55,7 @@ async def test_user_form_creates_entry(hass: HomeAssistant) -> None:
 
 
 async def test_user_form_allows_only_one_instance(hass: HomeAssistant) -> None:
+    """Abort configuration when an entry already exists."""
     existing = MockConfigEntry(
         domain=DOMAIN,
         title="Textbelt SMS",

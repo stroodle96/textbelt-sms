@@ -8,15 +8,15 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs
 
-
-REQUESTS = Path(os.getenv("TEXTBELT_STUB_REQUESTS", "/tmp/textbelt-requests.json"))
+REQUESTS = Path(os.getenv("TEXTBELT_STUB_REQUESTS", "textbelt-requests.json"))
 MODE = REQUESTS.with_name("mode")
 
 
 class Handler(BaseHTTPRequestHandler):
     """Record requests and return controllable Textbelt responses."""
 
-    def do_GET(self) -> None:  # noqa: N802
+    def do_GET(self) -> None:
+        """Serve health, mode, and recorded-request endpoints."""
         if self.path == "/requests":
             self._send(200, {"requests": self._read()})
             return
@@ -28,7 +28,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send(404, {})
 
-    def do_POST(self) -> None:  # noqa: N802
+    def do_POST(self) -> None:
+        """Handle mode changes and record Textbelt requests."""
         if self.path == "/reset":
             REQUESTS.write_text("[]", encoding="utf-8")
             self._send(200, {"ok": True})
@@ -71,10 +72,11 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def log_message(self, *_args: object) -> None:
+        """Keep the deterministic stub quiet."""
         return
 
 
 if __name__ == "__main__":
     REQUESTS.write_text("[]", encoding="utf-8")
     MODE.write_text("success", encoding="utf-8")
-    HTTPServer(("0.0.0.0", int(os.getenv("PORT", "8080"))), Handler).serve_forever()
+    HTTPServer(("0.0.0.0", int(os.getenv("PORT", "8080"))), Handler).serve_forever()  # noqa: S104
