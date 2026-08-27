@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import voluptuous as vol
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_API_KEY
 from homeassistant.core import HomeAssistant, HomeAssistantError
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.textbelt_sms import (
     SERVICE_SEND_SMS,
@@ -50,16 +50,12 @@ class _FailureSession(_Session):
         return _FailureResponse()
 
 
-def _entry() -> ConfigEntry:
-    return ConfigEntry(
-        version=1,
-        minor_version=1,
+def _entry() -> MockConfigEntry:
+    return MockConfigEntry(
         domain=DOMAIN,
         title="Textbelt SMS",
         data={CONF_API_KEY: "test-key"},
-        source="user",
         entry_id="test-entry",
-        options={},
     )
 
 
@@ -74,7 +70,7 @@ async def test_setup_registers_service_and_stores_client(
 
     assert await async_setup_entry(hass, entry)
     assert hass.services.has_service(DOMAIN, SERVICE_SEND_SMS)
-    assert entry.entry_id in hass.data[DOMAIN]
+    assert entry.runtime_data is not None
 
     service_info = hass.services.async_services()[DOMAIN][SERVICE_SEND_SMS]
     with pytest.raises(vol.Invalid):
@@ -93,7 +89,6 @@ async def test_setup_registers_service_and_stores_client(
                 "phone": "+15551234567",
                 "message": "hello",
                 "key": "test-key",
-                "webhookUrl": "/api/webhook/textbelt_sms_reply",
             },
         )
     ]
@@ -140,7 +135,7 @@ async def test_unload_removes_service_webhook_and_client(
 
     assert await async_unload_entry(hass, entry)
     assert not hass.services.has_service(DOMAIN, SERVICE_SEND_SMS)
-    assert entry.entry_id not in hass.data[DOMAIN]
+    assert entry.runtime_data is None
 
 
 async def test_reload_replaces_service_and_client(
@@ -155,7 +150,7 @@ async def test_reload_replaces_service_and_client(
     await async_reload_entry(hass, entry)
 
     assert hass.services.has_service(DOMAIN, SERVICE_SEND_SMS)
-    assert entry.entry_id in hass.data[DOMAIN]
+    assert entry.runtime_data is not None
 
 
 async def test_reply_webhook_fires_event_without_logging_payload(

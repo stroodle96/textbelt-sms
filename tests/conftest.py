@@ -4,8 +4,9 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
+def auto_enable_custom_integrations(request: pytest.FixtureRequest) -> None:
     """Allow Home Assistant to load the custom integration under test."""
+    request.getfixturevalue("enable_custom_integrations")
 
 
 @pytest.fixture

@@ -6,8 +6,10 @@ from typing import TYPE_CHECKING
 
 import voluptuous as vol
 from homeassistant.components.webhook import (
-    async_register_webhook,
-    async_unregister_webhook,
+    async_register as async_register_webhook,
+)
+from homeassistant.components.webhook import (
+    async_unregister as async_unregister_webhook,
 )
 from homeassistant.const import CONF_API_KEY
 from homeassistant.core import HomeAssistantError
@@ -92,8 +94,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         handle_webhook,
     )
 
-    # Store the client for use in the service
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = client
+    # Store the client on the config entry so all runtime consumers share the
+    # same typed lifecycle state.  The service closure below deliberately
+    # captures this instance instead of looking it up through the entity
+    # registry or a second mutable store.
+    entry.runtime_data = client
 
     async def handle_send_sms(call: ServiceCall) -> None:
         """Handle the send_sms service call to send an SMS using Textbelt."""
@@ -128,7 +133,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry and unregister the webhook."""
     LOGGER.debug("Unloading Textbelt SMS config entry")
-    hass.data[DOMAIN].pop(entry.entry_id, None)
+    entry.runtime_data = None
     hass.services.async_remove(DOMAIN, SERVICE_SEND_SMS)
     async_unregister_webhook(hass, WEBHOOK_ID)
     return True
