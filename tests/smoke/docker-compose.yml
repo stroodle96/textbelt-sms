@@ -1,0 +1,33 @@
+services:
+  textbelt:
+    image: python:3.14.2-alpine
+    working_dir: /app
+    command: python textbelt_stub.py
+    environment:
+      TEXTBELT_STUB_REQUESTS: /data/requests.json
+    volumes:
+      - ./textbelt_stub.py:/app/textbelt_stub.py:ro
+      - smoke-data:/data
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:2026.8.2
+    depends_on:
+      textbelt:
+        condition: service_healthy
+    environment:
+      TEXTBELT_SMS_API_BASE_URL: http://textbelt:8080
+    ports:
+      - "8123:8123"
+    volumes:
+      - ./ha-config:/config
+      - ../../custom_components/textbelt_sms:/config/custom_components/textbelt_sms:ro
+
+volumes:
+  smoke-data:

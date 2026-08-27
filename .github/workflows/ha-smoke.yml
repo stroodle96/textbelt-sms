@@ -1,0 +1,29 @@
+name: Real Home Assistant smoke test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Real HA and local Textbelt stub
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run smoke harness
+        env:
+          HA_TOKEN: ${{ secrets.HA_SMOKE_TOKEN }}
+        run: bash tests/smoke/run.sh
+      - name: Upload smoke logs
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.2
+        with:
+          name: ha-smoke-logs
+          path: tests/smoke/ha-smoke.log

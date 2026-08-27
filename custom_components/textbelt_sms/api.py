@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import os
 from http import HTTPStatus
 from typing import Any
 
 import aiohttp
+
+from .const import API_BASE_URL_ENV, DEFAULT_API_BASE_URL
+
+AUTHENTICATION_ERROR = "Invalid API key or unauthorized."
+INVALID_RESPONSE_ERROR = "Textbelt API returned an invalid response."
 
 
 class TextbeltApiClientError(Exception):
@@ -27,7 +33,8 @@ class TextbeltApiClient:
         """Initialize the client with API key and aiohttp session."""
         self._api_key = api_key
         self._session = session
-        self._endpoint = "https://textbelt.com/text"
+        base_url = os.getenv(API_BASE_URL_ENV, DEFAULT_API_BASE_URL).strip().rstrip("/")
+        self._endpoint = f"{base_url}/text"
 
     async def async_send_sms(
         self, phone: str, message: str, webhook_url: str | None = None
@@ -60,14 +67,21 @@ class TextbeltApiClient:
             payload["webhookUrl"] = webhook_url
         try:
             async with self._session.post(self._endpoint, data=payload) as response:
-                data = await response.json()
                 if response.status in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}:
-                    msg = "Invalid API key or unauthorized."
-                    raise TextbeltApiClientAuthenticationError(msg)
+                    raise TextbeltApiClientAuthenticationError(AUTHENTICATION_ERROR)
+                if response.status >= HTTPStatus.BAD_REQUEST:
+                    msg = f"Textbelt API returned HTTP {response.status}."
+                    raise TextbeltApiClientError(msg)
+                try:
+                    data = await response.json()
+                except (aiohttp.ClientError, TypeError, ValueError) as err:
+                    raise TextbeltApiClientError(INVALID_RESPONSE_ERROR) from err
+                if not isinstance(data, dict):
+                    raise TextbeltApiClientError(INVALID_RESPONSE_ERROR)
                 if not data.get("success", False):
                     msg = data.get("error", "Unknown error from Textbelt API.")
-                    raise TextbeltApiClientError(msg)
+                    raise TextbeltApiClientError(str(msg))
                 return data
-        except aiohttp.ClientError as err:
+        except (aiohttp.ClientError, TimeoutError) as err:
             msg = f"Network error: {err}"
             raise TextbeltApiClientCommunicationError(msg) from err

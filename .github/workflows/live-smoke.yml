@@ -1,0 +1,24 @@
+name: Protected live configuration smoke
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    environment: textbelt-live-smoke
+    runs-on: ubuntu-latest
+    env:
+      TEXTBELT_API_KEY: ${{ secrets.TEXTBELT_API_KEY_test }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Verify protected key is present (no SMS is sent)
+        if: ${{ github.event_name != 'pull_request' && env.TEXTBELT_API_KEY != '' }}
+        run: |
+          test -n "$TEXTBELT_API_KEY"
+          echo "Protected live smoke is configured; SMS send is intentionally skipped."

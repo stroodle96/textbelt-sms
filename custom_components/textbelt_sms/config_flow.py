@@ -19,11 +19,14 @@ class TextbeltSMSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         user_input: dict | None = None,
     ) -> config_entries.ConfigFlowResult:
         """Handle a flow initialized by the user."""
+        if self.hass.config_entries.async_entries(DOMAIN):
+            return self.async_abort(reason="already_configured")
+
         errors = {}
         if user_input is not None:
             api_key = user_input.get(CONF_API_KEY)
             if not api_key:
-                errors[CONF_API_KEY] = "API key required."
+                errors[CONF_API_KEY] = "invalid_api_key"
             if not errors:
                 return self.async_create_entry(
                     title="Textbelt SMS",
@@ -37,4 +40,5 @@ class TextbeltSMSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 }
             ),
             errors=errors,
+            description_placeholders={"docs_url": "https://docs.textbelt.com/"},
         )
