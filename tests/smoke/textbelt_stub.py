@@ -31,8 +31,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/status":
             self._send(200, {"status": self._status()})
             return
-        if self.path.startswith("/status/"):
-            self._send(200, {"success": True, "status": self._status()})
+        if self.path.startswith("/status/") and "?" not in self.path:
+            self._send(200, {"status": self._status()})
             return
         self._send(404, {})
 
@@ -66,7 +66,7 @@ class Handler(BaseHTTPRequestHandler):
             200,
             {
                 "success": self._mode() == "success",
-                "textId": f"stub-text-{len(requests)}",
+                "textId": len(requests),
             },
         )
 

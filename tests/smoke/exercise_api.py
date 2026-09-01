@@ -181,6 +181,7 @@ def main() -> None:
     parser.add_argument("--failure", action="store_true")
     parser.add_argument("--webhook-only", action="store_true")
     parser.add_argument("--verify-runtime", action="store_true")
+    parser.add_argument("--refresh-only", action="store_true")
     args = parser.parse_args()
     if args.failure and not args.token:
         parser.error("--failure requires --token from the initial smoke run")
@@ -193,6 +194,15 @@ def main() -> None:
             "POST",
             {"text": "reply"},
         )
+        return
+    if args.refresh_only:
+        call(
+            f"{args.base}/api/services/homeassistant/update_entity",
+            token,
+            "POST",
+            {"entity_id": "sensor.textbelt_sms_last_message_status"},
+        )
+        wait_for_state(args.base, token, "delivered")
         return
     if args.verify_runtime:
         assert_runtime(args.base, token)
@@ -211,14 +221,10 @@ def main() -> None:
             "message": "smoke",
             "key": args.api_key,
         }
-        expected_requests = [
-            expected_request,
-            {
-                **expected_request,
-                "webhookUrl": "http://homeassistant:8123/api/webhook/textbelt_sms_reply",
-            },
-        ]
-        if len(requests) != 1 or requests[0] not in expected_requests:
+        expected_request["replyWebhookUrl"] = (
+            "http://homeassistant:8123/api/webhook/textbelt_sms_reply"
+        )
+        if len(requests) != 1 or requests[0] != expected_request:
             raise SmokeError(f"Unexpected Textbelt stub request: {requests}")
         wait_for_state(args.base, token, "pending")
         stub_call(args.stub, "/status/delivered")

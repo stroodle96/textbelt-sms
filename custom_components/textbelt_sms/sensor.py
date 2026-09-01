@@ -15,7 +15,7 @@ from homeassistant.helpers.update_coordinator import (
     UpdateFailed,
 )
 
-from .api import TextbeltApiClient, TextbeltApiClientError
+from .api import TextbeltApiClient, TextbeltApiClientError, normalize_text_id
 from .const import (
     ATTR_DELIVERY_STATUS,
     ATTR_MESSAGE,
@@ -27,6 +27,8 @@ from .const import (
     STATUS_PENDING,
     STATUS_UNKNOWN,
 )
+
+INACTIVE_COORDINATOR_ERROR = "Textbelt SMS status coordinator is inactive"
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -59,6 +61,8 @@ class TextbeltStatusCoordinator(DataUpdateCoordinator[LastMessage | None]):
     def __init__(self, hass: HomeAssistant, client: TextbeltApiClient) -> None:
         """Initialize the status coordinator."""
         self.client = client
+        self._active = True
+        self._generation = 0
         super().__init__(
             hass,
             LOGGER,
@@ -70,23 +74,47 @@ class TextbeltStatusCoordinator(DataUpdateCoordinator[LastMessage | None]):
 
     async def _async_update_data(self) -> LastMessage | None:
         """Fetch status for the current message, if one exists."""
-        if self.data is None:
+        if not self._active:
+            raise UpdateFailed(INACTIVE_COORDINATOR_ERROR)
+        snapshot = self.data
+        generation = self._generation
+        if snapshot is None:
             return None
         try:
-            response = await self.client.async_get_status(self.data.text_id)
+            response = await self.client.async_get_status(snapshot.text_id)
         except TextbeltApiClientError as err:
             msg = "Unable to fetch Textbelt message status"
             raise UpdateFailed(msg) from err
-        raw_status = str(response.get("status", STATUS_UNKNOWN)).lower()
-        try:
-            status = MessageStatus(raw_status)
-        except ValueError:
-            status = MessageStatus.UNKNOWN
-        return replace(self.data, status=status)
+        if not self._active:
+            raise UpdateFailed(INACTIVE_COORDINATOR_ERROR)
+        if generation != self._generation:
+            return self.data
+        status_map = {
+            "pending": MessageStatus.PENDING,
+            "sending": MessageStatus.PENDING,
+            "sent": MessageStatus.PENDING,
+            "delivered": MessageStatus.DELIVERED,
+            "failed": MessageStatus.FAILED,
+            "unknown": MessageStatus.UNKNOWN,
+        }
+        status = status_map.get(
+            str(response.get("status", STATUS_UNKNOWN)).lower(),
+            MessageStatus.UNKNOWN,
+        )
+        return replace(snapshot, status=status)
 
-    def set_last_message(self, text_id: str, phone: str, message: str) -> None:
+    def set_last_message(self, text_id: int | str, phone: str, message: str) -> None:
         """Publish a newly sent message as pending immediately."""
-        self.async_set_updated_data(LastMessage(text_id, phone, message))
+        self._generation += 1
+        self.async_set_updated_data(
+            LastMessage(normalize_text_id(text_id), phone, message)
+        )
+
+    async def async_shutdown(self) -> None:
+        """Deactivate the coordinator before cancelling future refreshes."""
+        self._active = False
+        self._generation += 1
+        await super().async_shutdown()
 
 
 async def async_setup_entry(
@@ -115,6 +143,7 @@ class LastMessageStatusSensor(
     ) -> None:
         """Initialize the status sensor."""
         super().__init__(coordinator)
+        self.entity_id = "sensor.textbelt_sms_last_message_status"
         self._attr_unique_id = f"{entry.entry_id}_last_message_status"
 
     @property

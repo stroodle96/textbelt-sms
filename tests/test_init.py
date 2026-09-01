@@ -1,6 +1,7 @@
 # Copyright (c) 2019 - 2025  Joakim Sørensen @ludeeus
 """Tests for Home Assistant setup and service behavior."""
 
+import asyncio
 from typing import Self
 from unittest.mock import AsyncMock, MagicMock
 
@@ -30,8 +31,8 @@ class _Response:
     async def __aexit__(self, *_args: object) -> None:
         return None
 
-    async def json(self) -> dict[str, bool | str]:
-        return {"success": True, "textId": "abc"}
+    async def json(self) -> dict[str, bool | int]:
+        return {"success": True, "textId": 123}
 
 
 class _FailureResponse(_Response):
@@ -108,7 +109,7 @@ async def test_setup_registers_service_and_stores_client(
         )
     ]
     assert entry.runtime_data.coordinator.data == LastMessage(
-        text_id="abc",
+        text_id="123",
         phone="+15551234567",
         message="hello",
         status=MessageStatus.PENDING,
@@ -131,6 +132,132 @@ async def test_service_rejects_empty_values(
             DOMAIN, SERVICE_SEND_SMS, {"phone": "+1", "message": ""}, blocking=True
         )
     await entry.runtime_data.coordinator.async_shutdown()
+
+
+async def test_service_sends_reply_webhook_field(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Send requests use Textbelt's replyWebhookUrl field exactly."""
+    session = _Session()
+    monkeypatch.setattr(
+        "custom_components.textbelt_sms.async_get_clientsession", lambda _: session
+    )
+    monkeypatch.setattr(hass.config.api, "base_url", "https://ha.test/", raising=False)
+    entry = _entry()
+    await async_setup_entry(hass, entry)
+
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_SEND_SMS,
+        {"phone": "+1", "message": "hello"},
+        blocking=True,
+    )
+
+    assert session.calls == [
+        (
+            "http://textbelt.test/text",
+            {
+                "phone": "+1",
+                "message": "hello",
+                "key": "test-key",
+                "replyWebhookUrl": "https://ha.test/api/webhook/textbelt_sms_reply",
+            },
+        )
+    ]
+    await entry.runtime_data.coordinator.async_shutdown()
+
+
+async def test_overlapping_sends_commit_in_call_order(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Concurrent sends serialize so the final metadata is deterministic."""
+    monkeypatch.setattr(
+        "custom_components.textbelt_sms.async_get_clientsession", lambda _: _Session()
+    )
+    entry = _entry()
+    await async_setup_entry(hass, entry)
+    first_started = asyncio.Event()
+    release_first = asyncio.Event()
+    calls: list[str] = []
+
+    async def send(_phone: str, message: str, _webhook: str | None = None) -> dict:
+        calls.append(message)
+        if message == "first":
+            first_started.set()
+            await release_first.wait()
+            return {"success": True, "textId": 1}
+        return {"success": True, "textId": 2}
+
+    entry.runtime_data.client.async_send_sms = send
+    first = asyncio.create_task(
+        hass.services.async_call(
+            DOMAIN,
+            SERVICE_SEND_SMS,
+            {"phone": "+1", "message": "first"},
+            blocking=True,
+        )
+    )
+    await first_started.wait()
+    second = asyncio.create_task(
+        hass.services.async_call(
+            DOMAIN,
+            SERVICE_SEND_SMS,
+            {"phone": "+2", "message": "second"},
+            blocking=True,
+        )
+    )
+    await asyncio.sleep(0)
+    assert not second.done()
+    release_first.set()
+    await asyncio.gather(first, second)
+
+    assert calls == ["first", "second"]
+    assert entry.runtime_data.coordinator.data == LastMessage(
+        "2", "+2", "second", MessageStatus.PENDING
+    )
+    await entry.runtime_data.coordinator.async_shutdown()
+
+
+async def test_setup_rolls_back_when_platform_forwarding_fails(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Failed platform setup removes service, webhook, and runtime state."""
+    monkeypatch.setattr(
+        "custom_components.textbelt_sms.async_get_clientsession", lambda _: _Session()
+    )
+    monkeypatch.setattr(
+        hass.config_entries,
+        "async_forward_entry_setups",
+        AsyncMock(side_effect=RuntimeError("platform failed")),
+    )
+    unregister = MagicMock()
+    monkeypatch.setattr(
+        "custom_components.textbelt_sms.async_unregister_webhook", unregister
+    )
+    entry = _entry()
+
+    with pytest.raises(RuntimeError, match="platform failed"):
+        await async_setup_entry(hass, entry)
+
+    assert entry.runtime_data is None
+    assert not hass.services.has_service(DOMAIN, SERVICE_SEND_SMS)
+    unregister.assert_called_once_with(hass, WEBHOOK_ID)
+
+
+async def test_reload_does_not_setup_after_failed_unload(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reload stops when platform unloading reports failure."""
+    setup = AsyncMock()
+    monkeypatch.setattr("custom_components.textbelt_sms.async_setup_entry", setup)
+    monkeypatch.setattr(
+        "custom_components.textbelt_sms.async_unload_entry",
+        AsyncMock(return_value=False),
+    )
+
+    await async_reload_entry(hass, _entry())
+
+    setup.assert_not_awaited()
 
 
 async def test_service_exposes_textbelt_failure_as_homeassistant_error(

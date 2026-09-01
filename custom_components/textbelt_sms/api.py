@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 from http import HTTPStatus
+from numbers import Number
 from typing import Any
 from urllib.parse import quote
 
@@ -14,6 +15,7 @@ from .const import API_BASE_URL_ENV, DEFAULT_API_BASE_URL
 
 AUTHENTICATION_ERROR = "Invalid API key or unauthorized."
 INVALID_RESPONSE_ERROR = "Textbelt API returned an invalid response."
+INVALID_TEXT_ID_ERROR = "Textbelt text ID must be numeric or a non-empty string"
 
 
 class TextbeltApiClientError(Exception):
@@ -26,6 +28,19 @@ class TextbeltApiClientCommunicationError(TextbeltApiClientError):
 
 class TextbeltApiClientAuthenticationError(TextbeltApiClientError):
     """Exception to indicate an authentication error."""
+
+
+class TextbeltTextIdError(TextbeltApiClientError, ValueError):
+    """Exception raised when a Textbelt text ID is invalid."""
+
+
+def normalize_text_id(text_id: object) -> str:
+    """Validate and normalize a Textbelt text ID for URL and state use."""
+    if isinstance(text_id, bool) or not isinstance(text_id, (str, Number)):
+        raise TextbeltTextIdError(INVALID_TEXT_ID_ERROR)
+    if isinstance(text_id, str) and not text_id.strip():
+        raise TextbeltTextIdError(INVALID_TEXT_ID_ERROR)
+    return str(text_id)
 
 
 class TextbeltApiClient:
@@ -66,7 +81,7 @@ class TextbeltApiClient:
             "key": self._api_key,
         }
         if webhook_url:
-            payload["webhookUrl"] = webhook_url
+            payload["replyWebhookUrl"] = webhook_url
         try:
             async with self._session.post(self._endpoint, data=payload) as response:
                 if response.status in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}:
@@ -87,14 +102,13 @@ class TextbeltApiClient:
         except (aiohttp.ClientError, TimeoutError) as err:
             msg = f"Network error: {err}"
             raise TextbeltApiClientCommunicationError(msg) from err
-    async def async_get_status(self, text_id: str) -> dict[str, Any]:
+    async def async_get_status(self, text_id: int | str) -> dict[str, Any]:
         """Return the delivery status for a previously sent message."""
+        normalized_text_id = normalize_text_id(text_id)
         base_url = self._endpoint.removesuffix("/text")
-        endpoint = f"{base_url}/status/{quote(text_id, safe='')}"
+        endpoint = f"{base_url}/status/{quote(normalized_text_id, safe='')}"
         try:
-            async with self._session.get(
-                endpoint, params={"key": self._api_key}
-            ) as response:
+            async with self._session.get(endpoint) as response:
                 if response.status in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}:
                     raise TextbeltApiClientAuthenticationError(AUTHENTICATION_ERROR)
                 if response.status >= HTTPStatus.BAD_REQUEST:
@@ -106,10 +120,6 @@ class TextbeltApiClient:
                     raise TextbeltApiClientError(INVALID_RESPONSE_ERROR) from err
                 if not isinstance(data, dict):
                     raise TextbeltApiClientError(INVALID_RESPONSE_ERROR)
-                if not data.get("success", False):
-                    raise TextbeltApiClientError(
-                        str(data.get("error", "Unknown error from Textbelt API."))
-                    )
                 return data
         except (aiohttp.ClientError, TimeoutError) as err:
             msg = f"Network error: {err}"
