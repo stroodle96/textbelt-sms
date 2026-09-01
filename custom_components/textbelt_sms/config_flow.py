@@ -42,3 +42,4 @@ class TextbeltSMSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
             description_placeholders={"docs_url": "https://docs.textbelt.com/"},
         )
+# Copyright (c) 2019 - 2025  Joakim Sørensen @ludeeus

@@ -144,3 +144,4 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     LOGGER.debug("Reloading Textbelt SMS config entry")
     await async_unload_entry(hass, entry)
     await async_setup_entry(hass, entry)
+# Copyright (c) 2019 - 2025  Joakim Sørensen @ludeeus

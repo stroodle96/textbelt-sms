@@ -179,3 +179,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+# Copyright (c) 2019 - 2025  Joakim Sørensen @ludeeus

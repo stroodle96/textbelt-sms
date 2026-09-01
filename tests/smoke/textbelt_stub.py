@@ -80,3 +80,4 @@ if __name__ == "__main__":
     REQUESTS.write_text("[]", encoding="utf-8")
     MODE.write_text("success", encoding="utf-8")
     HTTPServer(("0.0.0.0", int(os.getenv("PORT", "8080"))), Handler).serve_forever()  # noqa: S104
+# Copyright (c) 2019 - 2025  Joakim Sørensen @ludeeus
