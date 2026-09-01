@@ -2,6 +2,7 @@
 """Tests for Home Assistant setup and service behavior."""
 
 import asyncio
+from types import SimpleNamespace
 from typing import Self
 from unittest.mock import AsyncMock, MagicMock
 
@@ -142,7 +143,12 @@ async def test_service_sends_reply_webhook_field(
     monkeypatch.setattr(
         "custom_components.textbelt_sms.async_get_clientsession", lambda _: session
     )
-    monkeypatch.setattr(hass.config.api, "base_url", "https://ha.test/", raising=False)
+    monkeypatch.setattr(
+        hass.config,
+        "api",
+        SimpleNamespace(base_url="https://ha.test/"),
+        raising=False,
+    )
     entry = _entry()
     await async_setup_entry(hass, entry)
 
