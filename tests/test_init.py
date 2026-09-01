@@ -36,6 +36,14 @@ class _Response:
         return {"success": True, "textId": 123}
 
 
+class _StatusResponse(_Response):
+    """Successful status response for coordinator refreshes."""
+
+    async def json(self) -> dict[str, str]:
+        """Return the provider status shape."""
+        return {"status": "PENDING"}
+
+
 class _FailureResponse(_Response):
     status = 500
 
@@ -47,6 +55,10 @@ class _Session:
     def post(self, url: str, *, data: dict[str, str]) -> _Response:
         self.calls.append((url, data))
         return _Response()
+
+    def get(self, _url: str) -> _StatusResponse:
+        """Return a successful status response without recording a send."""
+        return _StatusResponse()
 
 
 class _FailureSession(_Session):
@@ -136,7 +148,9 @@ async def test_service_rejects_empty_values(
 
 
 async def test_service_sends_reply_webhook_field(
-    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+    hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
+    api_base_url: str,
 ) -> None:
     """Send requests use Textbelt's replyWebhookUrl field exactly."""
     session = _Session()
@@ -151,26 +165,27 @@ async def test_service_sends_reply_webhook_field(
     )
     entry = _entry()
     await async_setup_entry(hass, entry)
-
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_SEND_SMS,
-        {"phone": "+1", "message": "hello"},
-        blocking=True,
-    )
-
-    assert session.calls == [
-        (
-            "http://textbelt.test/text",
-            {
-                "phone": "+1",
-                "message": "hello",
-                "key": "test-key",
-                "replyWebhookUrl": "https://ha.test/api/webhook/textbelt_sms_reply",
-            },
+    try:
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_SEND_SMS,
+            {"phone": "+1", "message": "hello"},
+            blocking=True,
         )
-    ]
-    await entry.runtime_data.coordinator.async_shutdown()
+
+        assert session.calls == [
+            (
+                f"{api_base_url}/text",
+                {
+                    "phone": "+1",
+                    "message": "hello",
+                    "key": "test-key",
+                    "replyWebhookUrl": "https://ha.test/api/webhook/textbelt_sms_reply",
+                },
+            )
+        ]
+    finally:
+        await async_unload_entry(hass, entry)
 
 
 async def test_overlapping_sends_commit_in_call_order(
