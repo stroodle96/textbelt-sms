@@ -1,3 +1,4 @@
+# Copyright (c) 2019 - 2025  Joakim Sørensen @ludeeus
 """Pytest fixtures for the Textbelt SMS integration."""
 
 import pytest
@@ -15,4 +16,3 @@ def api_base_url(monkeypatch: pytest.MonkeyPatch) -> str:
     url = "http://textbelt.test"
     monkeypatch.setenv("TEXTBELT_SMS_API_BASE_URL", url)
     return url
-# Copyright (c) 2019 - 2025  Joakim Sørensen @ludeeus

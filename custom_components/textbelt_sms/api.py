@@ -1,3 +1,4 @@
+# Copyright (c) 2019 - 2025  Joakim Sørensen @ludeeus
 """API client for Textbelt SMS service."""
 
 from __future__ import annotations
@@ -85,4 +86,3 @@ class TextbeltApiClient:
         except (aiohttp.ClientError, TimeoutError) as err:
             msg = f"Network error: {err}"
             raise TextbeltApiClientCommunicationError(msg) from err
-# Copyright (c) 2019 - 2025  Joakim Sørensen @ludeeus

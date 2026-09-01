@@ -1,3 +1,4 @@
+# Copyright (c) 2019 - 2025  Joakim Sørensen @ludeeus
 """Exercise config flow, service, failure, webhook, and restart via HA's API."""
 
 from __future__ import annotations
@@ -179,4 +180,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-# Copyright (c) 2019 - 2025  Joakim Sørensen @ludeeus

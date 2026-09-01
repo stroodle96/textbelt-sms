@@ -1,3 +1,4 @@
+# Copyright (c) 2019 - 2025  Joakim Sørensen @ludeeus
 """Tests for Home Assistant setup and service behavior."""
 
 from typing import Self
@@ -190,4 +191,3 @@ async def test_reply_webhook_fires_event_without_logging_payload(
     await hass.async_block_till_done()
 
     assert events == [{"from": "+1", "text": "reply"}]
-# Copyright (c) 2019 - 2025  Joakim Sørensen @ludeeus

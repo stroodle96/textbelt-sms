@@ -1,3 +1,4 @@
+# Copyright (c) 2019 - 2025  Joakim Sørensen @ludeeus
 """Tests for the Textbelt SMS config flow."""
 
 import pytest
@@ -73,4 +74,3 @@ async def test_user_form_allows_only_one_instance(hass: HomeAssistant) -> None:
 
     assert result["type"] == "abort"
     assert result["reason"] == "already_configured"
-# Copyright (c) 2019 - 2025  Joakim Sørensen @ludeeus

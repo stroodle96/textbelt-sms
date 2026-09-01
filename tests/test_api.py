@@ -1,3 +1,4 @@
+# Copyright (c) 2019 - 2025  Joakim Sørensen @ludeeus
 """Tests for the Textbelt HTTP client."""
 
 from unittest.mock import AsyncMock, MagicMock
@@ -151,4 +152,3 @@ async def test_send_sms_raises_error_for_malformed_json() -> None:
         await TextbeltApiClient("secret", _session(response)).async_send_sms(
             "+1", "hello"
         )
-# Copyright (c) 2019 - 2025  Joakim Sørensen @ludeeus

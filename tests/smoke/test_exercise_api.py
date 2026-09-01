@@ -1,3 +1,4 @@
+# Copyright (c) 2019 - 2025  Joakim Sørensen @ludeeus
 """Tests for the real Home Assistant smoke API exercise helper."""
 
 from __future__ import annotations
@@ -70,4 +71,3 @@ def test_failure_mode_calls_existing_entry_service_without_config_flow(
         "http://127.0.0.1:8123/api/services/textbelt_sms/send_sms",
     ]
     assert calls[-1]["token"] == "existing-token"  # noqa: S105
-# Copyright (c) 2019 - 2025  Joakim Sørensen @ludeeus
