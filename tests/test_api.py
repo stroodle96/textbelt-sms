@@ -161,6 +161,8 @@ async def test_send_sms_raises_error_for_malformed_json() -> None:
         await TextbeltApiClient("secret", _session(response)).async_send_sms(
             "+1", "hello"
         )
+
+
 @pytest.mark.asyncio
 async def test_get_status_uses_exact_path_without_key_or_query(
     api_base_url: str,
@@ -225,6 +227,8 @@ async def test_get_status_raises_for_malformed_json() -> None:
         await TextbeltApiClient(
             "secret", _get_session(malformed_response)
         ).async_get_status("abc")
+
+
 @pytest.mark.asyncio
 async def test_get_status_raises_for_non_dict_json() -> None:
     """Reject a successful status response whose JSON is not an object."""

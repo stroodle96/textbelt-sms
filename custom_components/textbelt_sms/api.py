@@ -102,6 +102,7 @@ class TextbeltApiClient:
         except (aiohttp.ClientError, TimeoutError) as err:
             msg = f"Network error: {err}"
             raise TextbeltApiClientCommunicationError(msg) from err
+
     async def async_get_status(self, text_id: int | str) -> dict[str, Any]:
         """Return the delivery status for a previously sent message."""
         normalized_text_id = normalize_text_id(text_id)
