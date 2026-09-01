@@ -14,6 +14,9 @@ class SmokeError(RuntimeError):
     """Raised when a real-HA smoke assertion fails."""
 
 
+HA_CLIENT_ID = "http://home-assistant.io"
+
+
 def call(
     url: str,
     token: str = "",
@@ -65,6 +68,7 @@ def bootstrap_token(base: str) -> str:
             "username": "smoke",
             "password": "textbelt-smoke-password",
             "language": "en",
+            "client_id": HA_CLIENT_ID,
         },
     )
     auth = call(
@@ -73,7 +77,7 @@ def bootstrap_token(base: str) -> str:
         form={
             "grant_type": "authorization_code",
             "code": onboarding["auth_code"],
-            "client_id": "http://home-assistant.io",
+            "client_id": HA_CLIENT_ID,
         },
     )
     return auth["access_token"]
@@ -97,6 +101,44 @@ def assert_runtime(base: str, token: str) -> None:
         raise SmokeError(f"Unexpected send_sms service registration: {matches}")
 
 
+def configure_entry(base: str, token: str, api_key: str) -> None:
+    """Create the Textbelt config entry during the first smoke run."""
+    flow = call(
+        f"{base}/api/config/config_entries/flow",
+        token,
+        "POST",
+        {"handler": "textbelt_sms", "show_advanced_options": False},
+    )
+    result = call(
+        f"{base}/api/config/config_entries/flow/{flow['flow_id']}",
+        token,
+        "POST",
+        {"api_key": api_key},
+    )
+    if result.get("type") != "create_entry":
+        raise SmokeError(f"config flow failed: {result}")
+
+
+def exercise_service(
+    base: str, token: str, message: str, *, expect_failure: bool = False
+) -> None:
+    """Call the public service and assert its expected success or failure."""
+    try:
+        call(
+            f"{base}/api/services/textbelt_sms/send_sms",
+            token,
+            "POST",
+            {"phone": "+15551234567", "message": message},
+        )
+    except error.HTTPError:
+        if not expect_failure:
+            raise
+    else:
+        if expect_failure:
+            message = "failure stub unexpectedly returned success"
+            raise SmokeError(message)
+
+
 def main() -> None:
     """Run the onboarding, config-entry, service, and webhook smoke checks."""
     parser = argparse.ArgumentParser()
@@ -109,6 +151,8 @@ def main() -> None:
     parser.add_argument("--webhook-only", action="store_true")
     parser.add_argument("--verify-runtime", action="store_true")
     args = parser.parse_args()
+    if args.failure and not args.token:
+        parser.error("--failure requires --token from the initial smoke run")
     wait_for_ha(args.base)
     token = args.token or bootstrap_token(args.base)
     if args.webhook_only:
@@ -121,41 +165,14 @@ def main() -> None:
         return
     if args.verify_runtime:
         assert_runtime(args.base, token)
-        call(
-            f"{args.base}/api/services/textbelt_sms/send_sms",
-            token,
-            "POST",
-            {"phone": "+15551234567", "message": "restart-smoke"},
-        )
+        exercise_service(args.base, token, "restart-smoke")
         return
-    flow = call(
-        f"{args.base}/api/config/config_entries/flow",
-        token,
-        "POST",
-        {"handler": "textbelt_sms", "show_advanced_options": False},
-    )
-    result = call(
-        f"{args.base}/api/config/config_entries/flow/{flow['flow_id']}",
-        token,
-        "POST",
-        {"api_key": args.api_key},
-    )
-    if result.get("type") != "create_entry":
-        raise SmokeError(f"config flow failed: {result}")
-    try:
-        call(
-            f"{args.base}/api/services/textbelt_sms/send_sms",
-            token,
-            "POST",
-            {"phone": "+15551234567", "message": "smoke"},
-        )
-    except error.HTTPError:
-        if not args.failure:
-            raise
-    else:
-        if args.failure:
-            message = "failure stub unexpectedly returned success"
-            raise SmokeError(message)
+    if args.failure:
+        assert_runtime(args.base, token)
+        exercise_service(args.base, token, "smoke", expect_failure=True)
+        return
+    configure_entry(args.base, token, args.api_key)
+    exercise_service(args.base, token, "smoke")
     assert_runtime(args.base, token)
     sys.stdout.write(token)
 
