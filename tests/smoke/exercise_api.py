@@ -42,6 +42,24 @@ def call(
         return json.loads(content) if content else {}
 
 
+def stub_call(stub: str, path: str) -> dict:
+    """Change or inspect the deterministic local Textbelt stub."""
+    method = "POST" if path.startswith(("/mode/", "/status/")) else "GET"
+    return call(f"{stub}{path}", method=method)
+
+
+def wait_for_state(base: str, token: str, expected: str) -> None:
+    """Wait for a sensor state after requesting a coordinator refresh."""
+    for _ in range(30):
+        state = call(
+            f"{base}/api/states/sensor.textbelt_sms_last_message_status", token
+        )
+        if state.get("state") == expected:
+            return
+        time.sleep(1)
+    raise SmokeError(f"Sensor did not reach {expected}: {state}")
+
+
 def wait_for_ha(base: str) -> None:
     """Wait until HA's HTTP/onboarding stack is responding."""
     for _ in range(90):
@@ -157,9 +175,13 @@ def main() -> None:
         "--api-key", default=os.environ.get("TEXTBELT_API_KEY", "smoke-test-key")
     )
     parser.add_argument("--base", default="http://127.0.0.1:8123")
+    parser.add_argument(
+        "--stub", default=os.environ.get("TEXTBELT_STUB_URL", "http://127.0.0.1:8080")
+    )
     parser.add_argument("--failure", action="store_true")
     parser.add_argument("--webhook-only", action="store_true")
     parser.add_argument("--verify-runtime", action="store_true")
+    parser.add_argument("--refresh-only", action="store_true")
     args = parser.parse_args()
     if args.failure and not args.token:
         parser.error("--failure requires --token from the initial smoke run")
@@ -173,6 +195,15 @@ def main() -> None:
             {"text": "reply"},
         )
         return
+    if args.refresh_only:
+        call(
+            f"{args.base}/api/services/homeassistant/update_entity",
+            token,
+            "POST",
+            {"entity_id": "sensor.textbelt_sms_last_message_status"},
+        )
+        wait_for_state(args.base, token, "delivered")
+        return
     if args.verify_runtime:
         assert_runtime(args.base, token)
         exercise_service(args.base, token, "restart-smoke")
@@ -183,6 +214,35 @@ def main() -> None:
         return
     configure_entry(args.base, token, args.api_key)
     exercise_service(args.base, token, "smoke")
+    if not args.failure:
+        requests = call(f"{args.stub}/requests").get("requests", [])
+        expected_request = {
+            "phone": "+15551234567",
+            "message": "smoke",
+            "key": args.api_key,
+        }
+        expected_request["replyWebhookUrl"] = (
+            "http://homeassistant:8123/api/webhook/textbelt_sms_reply"
+        )
+        if len(requests) != 1 or requests[0] != expected_request:
+            raise SmokeError(f"Unexpected Textbelt stub request: {requests}")
+        wait_for_state(args.base, token, "pending")
+        stub_call(args.stub, "/status/delivered")
+        call(
+            f"{args.base}/api/services/homeassistant/update_entity",
+            token,
+            "POST",
+            {"entity_id": "sensor.textbelt_sms_last_message_status"},
+        )
+        wait_for_state(args.base, token, "delivered")
+        stub_call(args.stub, "/status/failed")
+        call(
+            f"{args.base}/api/services/homeassistant/update_entity",
+            token,
+            "POST",
+            {"entity_id": "sensor.textbelt_sms_last_message_status"},
+        )
+        wait_for_state(args.base, token, "failed")
     assert_runtime(args.base, token)
     sys.stdout.write(token)
 
