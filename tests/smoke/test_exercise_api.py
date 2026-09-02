@@ -50,7 +50,11 @@ def test_failure_mode_calls_existing_entry_service_without_config_flow(
         if url.endswith("/api/services/textbelt_sms/send_sms"):
             raise exercise_api.error.HTTPError(url, 500, "failure", {}, None)
         if url.endswith("/api/config/config_entries/entry"):
-            return [{"domain": "textbelt_sms", "state": "loaded"}]
+            return [
+                {"domain": "sun", "state": "loaded"},
+                {"domain": "textbelt_sms", "state": "loaded"},
+                {"domain": "analytics", "state": "setup_in_progress"},
+            ]
         if url.endswith("/api/services"):
             return [{"domain": "textbelt_sms", "services": {"send_sms": {}}}]
         return {}

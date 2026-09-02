@@ -27,7 +27,7 @@ cleanup() {
   docker compose -p "$project" -f "$smoke_dir/docker-compose.yml" cp textbelt:/data/mode "$artifact_dir/stub-mode" || true
   cp "$config_dir/configuration.yaml" "$artifact_dir/configuration.yaml" 2>/dev/null || true
   docker compose -p "$project" -f "$smoke_dir/docker-compose.yml" down -v --remove-orphans || true
-  rm -rf "$config_dir"
+  rm -rf "$config_dir" || true
 }
 trap cleanup EXIT
 
