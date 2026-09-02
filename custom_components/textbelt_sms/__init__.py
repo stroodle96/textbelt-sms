@@ -1,23 +1,42 @@
+# Copyright (c) 2019 - 2025  Joakim Sørensen @ludeeus
 """Home Assistant custom component to send SMS using the Textbelt API."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import voluptuous as vol
 from homeassistant.components.webhook import (
-    async_register_webhook,
-    async_unregister_webhook,
+    async_register as async_register_webhook,
 )
+from homeassistant.components.webhook import (
+    async_unregister as async_unregister_webhook,
+)
+from homeassistant.const import CONF_API_KEY
+from homeassistant.core import HomeAssistantError
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import TextbeltApiClient, TextbeltApiClientError
-from .const import DOMAIN, LOGGER
+from .const import DOMAIN, EVENT_REPLY, LOGGER, SERVICE_SEND_SMS
 
 if TYPE_CHECKING:
     from aiohttp import web
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant, ServiceCall
     from homeassistant.helpers.typing import ConfigType
+
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+SERVICE_SCHEMA = vol.Schema(
+    {
+        vol.Required("phone"): cv.string,
+        vol.Required("message"): cv.string,
+    }
+)
+MISSING_FIELDS_ERROR = "Phone and message are required"
+SEND_ERROR = "Unable to send SMS via Textbelt"
+FAILED_SEND_ERROR = "Textbelt did not send the SMS"
 
 
 def _validate_api_key(api_key: str | None) -> str:
@@ -44,7 +63,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up the Textbelt SMS integration from a config entry."""
     LOGGER.debug("Setting up Textbelt SMS config entry")
     try:
-        api_key = _validate_api_key(entry.data.get("api_key"))
+        api_key = _validate_api_key(entry.data.get(CONF_API_KEY))
         session = async_get_clientsession(hass)
         client = TextbeltApiClient(api_key, session)
     except ValueError as err:
@@ -64,9 +83,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         """
         data = await request.json()
-        LOGGER.info("Received SMS reply via webhook: %s", data)
         # Fire a Home Assistant event for automations or further processing
-        hass.bus.async_fire("textbelt_sms_reply", data)
+        hass.bus.async_fire(EVENT_REPLY, data)
 
     # Register the webhook endpoint
     async_register_webhook(
@@ -77,8 +95,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         handle_webhook,
     )
 
-    # Store the client for use in the service
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = client
+    # Store the client on the config entry so all runtime consumers share the
+    # same typed lifecycle state.  The service closure below deliberately
+    # captures this instance instead of looking it up through the entity
+    # registry or a second mutable store.
+    entry.runtime_data = client
 
     async def handle_send_sms(call: ServiceCall) -> None:
         """Handle the send_sms service call to send an SMS using Textbelt."""
@@ -86,33 +107,35 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         phone = call.data.get("phone")
         message = call.data.get("message")
         # Construct the public webhook URL (user must expose HA to the internet)
-        base_url = getattr(hass.config.api, "base_url", "")
-        webhook_url = f"{base_url}/api/webhook/{WEBHOOK_ID}"
+        base_url = getattr(hass.config.api, "base_url", "") or ""
+        webhook_url = (
+            f"{base_url.rstrip('/')}/api/webhook/{WEBHOOK_ID}" if base_url else None
+        )
         if not phone or not message:
-            LOGGER.error("Phone and message must be provided to send_sms service")
-            return
+            raise HomeAssistantError(MISSING_FIELDS_ERROR)
 
         try:
             result = await client.async_send_sms(phone, message, webhook_url)
         except TextbeltApiClientError as err:
-            LOGGER.error("Error while sending SMS: %s", err)
-            return
+            raise HomeAssistantError(SEND_ERROR) from err
 
         if result.get("success"):
-            LOGGER.info("SMS sent successfully to %s", phone)
-        else:
-            LOGGER.error("Failed to send SMS: %s", result.get("error"))
+            return
+        raise HomeAssistantError(FAILED_SEND_ERROR)
 
     # Register the send_sms service
     LOGGER.debug("Registering send_sms service")
-    hass.services.async_register(DOMAIN, "send_sms", handle_send_sms)
+    hass.services.async_register(
+        DOMAIN, SERVICE_SEND_SMS, handle_send_sms, schema=SERVICE_SCHEMA
+    )
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry and unregister the webhook."""
     LOGGER.debug("Unloading Textbelt SMS config entry")
-    hass.data[DOMAIN].pop(entry.entry_id, None)
+    entry.runtime_data = None
+    hass.services.async_remove(DOMAIN, SERVICE_SEND_SMS)
     async_unregister_webhook(hass, WEBHOOK_ID)
     return True
 

@@ -23,3 +23,7 @@ keep-runtime-typing = true
 
 [lint.mccabe]
 max-complexity = 25
+
+[lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
+"tests/smoke/exercise_api.py" = ["EM102", "TRY003"]
