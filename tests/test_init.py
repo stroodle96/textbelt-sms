@@ -2,7 +2,6 @@
 """Tests for Home Assistant setup and service behavior."""
 
 import asyncio
-from types import SimpleNamespace
 from typing import Self
 from unittest.mock import AsyncMock, MagicMock
 
@@ -157,12 +156,13 @@ async def test_service_sends_reply_webhook_field(
     monkeypatch.setattr(
         "custom_components.textbelt_sms.async_get_clientsession", lambda _: session
     )
-    monkeypatch.setattr(
-        hass.config,
-        "api",
-        SimpleNamespace(base_url="https://ha.test/"),
-        raising=False,
-    )
+    url_options: list[dict[str, bool]] = []
+
+    def fake_get_url(_hass: HomeAssistant, **kwargs: bool) -> str:
+        url_options.append(kwargs)
+        return "https://ha.test/"
+
+    monkeypatch.setattr("custom_components.textbelt_sms.get_url", fake_get_url)
     entry = _entry()
     await async_setup_entry(hass, entry)
     try:
@@ -184,6 +184,7 @@ async def test_service_sends_reply_webhook_field(
                 },
             )
         ]
+        assert url_options == [{"allow_internal": False}]
     finally:
         await async_unload_entry(hass, entry)
 

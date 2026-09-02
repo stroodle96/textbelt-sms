@@ -18,6 +18,7 @@ from homeassistant.const import CONF_API_KEY, Platform
 from homeassistant.core import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.network import NoURLAvailableError, get_url
 
 from .api import TextbeltApiClient, TextbeltApiClientError, normalize_text_id
 from .const import DOMAIN, EVENT_REPLY, LOGGER, SERVICE_SEND_SMS, WEBHOOK_ID
@@ -56,6 +57,15 @@ def _validate_api_key(api_key: str | None) -> str:
         LOGGER.error("Invalid API key: %s", msg)
         raise ValueError(msg)
     return api_key
+
+
+def _reply_webhook_url(hass: HomeAssistant) -> str | None:
+    """Return a provider-reachable reply webhook URL when HA exposes one."""
+    try:
+        base_url = get_url(hass, allow_internal=False)
+    except NoURLAvailableError:
+        return None
+    return f"{base_url.rstrip('/')}/api/webhook/{WEBHOOK_ID}"
 
 
 async def async_setup(hass: HomeAssistant, _: ConfigType) -> bool:
@@ -131,11 +141,8 @@ async def async_setup_entry(  # noqa: PLR0915
             LOGGER.debug("Handling send_sms service call")
             phone = call.data.get("phone")
             message = call.data.get("message")
-            # Construct the public webhook URL (user must expose HA to the internet)
-            base_url = getattr(hass.config.api, "base_url", "") or ""
-            webhook_url = (
-                f"{base_url.rstrip('/')}/api/webhook/{WEBHOOK_ID}" if base_url else None
-            )
+            # Textbelt must receive an externally reachable URL for SMS replies.
+            webhook_url = _reply_webhook_url(hass)
             if not phone or not message:
                 _raise_action_error(MISSING_FIELDS_ERROR)
 

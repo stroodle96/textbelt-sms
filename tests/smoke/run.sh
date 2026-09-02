@@ -12,6 +12,8 @@ export COMPOSE_PROJECT_NAME="$project"
 mkdir -p "$config_dir"
 cat > "$config_dir/configuration.yaml" <<'EOF'
 default_config:
+homeassistant:
+  external_url: http://homeassistant:8123
 http:
   server_port: 8123
 EOF
