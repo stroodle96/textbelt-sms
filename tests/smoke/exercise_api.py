@@ -25,7 +25,7 @@ def call(
     payload: dict | None = None,
     *,
     form: dict[str, str] | None = None,
-) -> dict:
+) -> dict | list:
     """Call a Home Assistant HTTP API endpoint and decode its JSON response."""
     if form is not None:
         body = parse.urlencode(form).encode()
@@ -38,7 +38,8 @@ def call(
         "application/x-www-form-urlencoded" if form else "application/json",
     )
     with request.urlopen(req, timeout=10) as response:  # noqa: S310
-        return json.load(response)
+        content = response.read()
+        return json.loads(content) if content else {}
 
 
 def wait_for_ha(base: str) -> None:

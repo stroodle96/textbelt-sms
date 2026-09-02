@@ -4,12 +4,26 @@
 from __future__ import annotations
 
 import sys
+from io import BytesIO
 from typing import TYPE_CHECKING
 
 from tests.smoke import exercise_api
 
 if TYPE_CHECKING:
     import pytest
+
+
+def test_call_accepts_successful_empty_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Treat Home Assistant's empty successful webhook response as success."""
+    monkeypatch.setattr(
+        exercise_api.request,
+        "urlopen",
+        lambda *_args, **_kwargs: BytesIO(b""),
+    )
+
+    assert exercise_api.call("http://ha/api/webhook/test", method="POST") == {}
 
 
 def test_bootstrap_token_uses_home_assistant_client_id(
