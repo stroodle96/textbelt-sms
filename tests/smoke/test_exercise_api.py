@@ -45,6 +45,28 @@ def test_bootstrap_token_uses_home_assistant_client_id(
     assert calls[1]["form"]["client_id"] == "http://home-assistant.io"
 
 
+def test_assert_runtime_waits_for_entry_to_load(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Wait for config-entry setup to finish after a real HA restart."""
+    entry_responses = [
+        [{"domain": "textbelt_sms", "state": "not_loaded"}],
+        [{"domain": "textbelt_sms", "state": "loaded"}],
+    ]
+
+    def fake_call(url: str, _token: str = "") -> dict | list:
+        if url.endswith("/api/config/config_entries/entry"):
+            return entry_responses.pop(0)
+        return [{"domain": "textbelt_sms", "services": {"send_sms": {}}}]
+
+    monkeypatch.setattr(exercise_api, "call", fake_call)
+    monkeypatch.setattr(exercise_api.time, "sleep", lambda _seconds: None)
+
+    exercise_api.assert_runtime("http://ha", "token")
+
+    assert entry_responses == []
+
+
 def test_failure_mode_calls_existing_entry_service_without_config_flow(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

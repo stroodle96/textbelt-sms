@@ -87,13 +87,18 @@ def bootstrap_token(base: str) -> str:
 
 def assert_runtime(base: str, token: str) -> None:
     """Assert one loaded entry and one callable public service."""
-    entries = call(f"{base}/api/config/config_entries/entry", token)
-    textbelt_entries = [
-        entry for entry in entries if entry.get("domain") == "textbelt_sms"
-    ]
-    if len(textbelt_entries) != 1:
-        raise SmokeError(f"Unexpected Textbelt config entries: {textbelt_entries}")
-    if textbelt_entries[0].get("state") != "loaded":
+    textbelt_entries = []
+    for _ in range(60):
+        entries = call(f"{base}/api/config/config_entries/entry", token)
+        textbelt_entries = [
+            entry for entry in entries if entry.get("domain") == "textbelt_sms"
+        ]
+        if len(textbelt_entries) == 1 and textbelt_entries[0].get("state") == "loaded":
+            break
+        time.sleep(1)
+    else:
+        if len(textbelt_entries) != 1:
+            raise SmokeError(f"Unexpected Textbelt config entries: {textbelt_entries}")
         raise SmokeError(f"Textbelt entry is not loaded: {textbelt_entries[0]}")
     services = call(f"{base}/api/services", token)
     matches = [
