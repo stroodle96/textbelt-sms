@@ -8,7 +8,7 @@ File | Purpose | Documentation
 -- | -- | --
 `.devcontainer.json` | Used for development/testing with Visual Studio Code. | [Documentation](https://code.visualstudio.com/docs/remote/containers)
 `.github/ISSUE_TEMPLATE/*.yml` | Templates for the issue tracker | [Documentation](https://help.github.com/en/github/building-a-strong-community/configuring-issue-templates-for-your-repository)
-`custom_components/textbelt-sms/*` | Integration files, this is where everything happens. | [Documentation](https://developers.home-assistant.io/docs/creating_component_index)
+`custom_components/textbelt_sms/*` | Integration files, this is where everything happens. | [Documentation](https://developers.home-assistant.io/docs/creating_component_index)
 `CONTRIBUTING.md` | Guidelines on how to contribute. | [Documentation](https://help.github.com/en/github/building-a-strong-community/setting-guidelines-for-repository-contributors)
 `LICENSE` | The license file for the project. | [Documentation](https://help.github.com/en/github/creating-cloning-and-archiving-repositories/licensing-a-repository)
 `README.md` | The file you are reading now, should contain info about the integration, installation and configuration instructions. | [Documentation](https://help.github.com/en/github/writing-on-github/basic-writing-and-formatting-syntax)
@@ -18,7 +18,7 @@ File | Purpose | Documentation
 
 1. Create a new repository in GitHub, using this repository as a template by clicking the "Use this template" button in the GitHub UI.
 1. Open your new repository in Visual Studio Code devcontainer (Preferably with the "`Dev Containers: Clone Repository in Named Container Volume...`" option).
-1. Rename all instances of the `textbelt-sms` to `custom_components/<your_integration_domain>` (e.g. `custom_components/awesome_integration`).
+1. Rename all instances of `textbelt_sms` to `<your_integration_domain>` (e.g. `awesome_integration`).
 1. Rename all instances of the `Integration Blueprint` to `<Your Integration Name>` (e.g. `Awesome Integration`).
 1. Run the `scripts/develop` to start HA and test out your new integration.
 
@@ -43,12 +43,32 @@ This custom component integrates the [Textbelt SMS API](https://textbelt.com/) i
 
 ## Installation
 
-### HACS (Recommended)
+### HACS custom repository (recommended)
 
-1. Make sure [HACS](https://hacs.xyz) is installed
-2. Add this repository through HACS
-3. Search for "Textbelt SMS" in HACS and install
-4. Restart Home Assistant
+1. Install and configure [HACS](https://www.hacs.xyz/) if it is not already available.
+2. Open HACS, open the menu, and select **Custom repositories**.
+3. Enter `https://github.com/stroodle96/textbelt-sms`, select **Integration**, and add the repository.
+4. Open **Textbelt SMS** and select **Download**.
+5. Under **Need a different version?**, choose the release to install.
+6. Restart Home Assistant after installation or a version change.
+
+#### Installing a prerelease
+
+HACS excludes GitHub prereleases by default. To install `v0.2.0` while it is marked as a prerelease:
+
+1. Go to **Settings → Devices & services → HACS → Entities**.
+2. Show disabled entities and enable the prerelease switch associated with Textbelt SMS.
+3. Turn the switch on.
+4. In HACS, open Textbelt SMS and select **Update information**.
+5. Download Textbelt SMS and select `v0.2.0` under **Need a different version?**.
+
+The prerelease switch is not required after `v0.2.0` is promoted to a stable GitHub release.
+
+#### Rolling back
+
+Open Textbelt SMS in HACS, select **Download**, choose an earlier release under
+**Need a different version?**, and restart Home Assistant. Use **Update information**
+first if the expected release is not listed.
 
 ### Manual Installation
 
