@@ -31,6 +31,7 @@ jobs:
     outputs:
       tag: ${{ steps.contract.outputs.tag }}
       operation: ${{ steps.state.outputs.operation }}
+      release_sha: ${{ steps.state.outputs.release_sha }}
     steps:
       - name: Require main branch
         if: github.ref != 'refs/heads/main'
@@ -73,6 +74,7 @@ jobs:
               exit 1
             fi
             echo "operation=create" >> "$GITHUB_OUTPUT"
+            echo "release_sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -91,12 +93,14 @@ jobs:
             exit 1
           fi
 
-          if ! git merge-base --is-ancestor "$TAG" "$GITHUB_SHA"; then
+          release_sha="$(git rev-list -n 1 "$TAG")"
+          if ! git merge-base --is-ancestor "$release_sha" "$GITHUB_SHA"; then
             echo "Tag $TAG is not in the history of this main commit; refusing promotion." >&2
             exit 1
           fi
 
           echo "operation=promote" >> "$GITHUB_OUTPUT"
+          echo "release_sha=$release_sha" >> "$GITHUB_OUTPUT"
 
       - name: Check out the immutable prerelease for promotion
         if: steps.state.outputs.operation == 'promote'
@@ -128,6 +132,9 @@ jobs:
         uses: home-assistant/actions/hassfest@a7c616ce81ccda50150bf1595786c71b1883fabb # master
 
       - name: Run HACS validation
+        env:
+          # The HACS action validates GitHub content, not the local checkout.
+          REPOSITORY_REF: ${{ steps.state.outputs.release_sha }}
         uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa # main
         with:
           category: integration
@@ -140,15 +147,36 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout the verified release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.verify.outputs.release_sha }}
+
       - name: Create GitHub release
         if: needs.verify.outputs.operation == 'create'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.verify.outputs.tag }}
           CHANNEL: ${{ inputs.channel }}
+          RELEASE_SHA: ${{ needs.verify.outputs.release_sha }}
         shell: bash
         run: |
-          args=("$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$TAG" --generate-notes)
+          if git show-ref --verify --quiet "refs/tags/$TAG" || gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Tag or release $TAG appeared after verification; refusing to reuse it." >&2
+            exit 1
+          fi
+
+          git tag "$TAG" "$RELEASE_SHA"
+          git push origin "refs/tags/$TAG"
+
+          remote_sha="$(git ls-remote origin "refs/tags/$TAG" | awk '{print $1}')"
+          if [[ "$remote_sha" != "$RELEASE_SHA" ]]; then
+            echo "Remote tag $TAG targets $remote_sha, expected $RELEASE_SHA." >&2
+            exit 1
+          fi
+
+          args=("$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$TAG" --generate-notes)
           if [[ "$CHANNEL" == "prerelease" ]]; then
             args+=(--prerelease)
           fi
@@ -159,5 +187,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.verify.outputs.tag }}
+          RELEASE_SHA: ${{ needs.verify.outputs.release_sha }}
         shell: bash
-        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease=false --latest --title "$TAG"
+        run: |
+          git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+          current_sha="$(git rev-list -n 1 "$TAG")"
+          if [[ "$current_sha" != "$RELEASE_SHA" ]]; then
+            echo "Tag $TAG moved after verification; refusing promotion." >&2
+            exit 1
+          fi
+
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG disappeared after verification; refusing promotion." >&2
+            exit 1
+          fi
+          if [[ "$(gh release view "$TAG" --json isPrerelease --jq .isPrerelease)" != "true" ]]; then
+            echo "Release $TAG is no longer a prerelease; refusing duplicate promotion." >&2
+            exit 1
+          fi
+
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease=false --latest --title "$TAG"

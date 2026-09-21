@@ -260,6 +260,12 @@ Expected: the commit includes the specification, plan, tested validator, metadat
 - Produces: manual workflow inputs `version: string` and `channel: prerelease | stable`.
 - Produces: operation `create` for an unused version or `promote` for the exact existing prerelease tag on the same commit.
 
+**Review hardening:** The implemented workflow passes the exact tested commit as
+`REPOSITORY_REF` because the HACS action validates GitHub content rather than the
+local checkout. The publication job also rechecks remote state, creates a new tag
+at the verified commit before using `gh release create --verify-tag`, and rechecks
+the tag and prerelease state immediately before promotion.
+
 - [ ] **Step 1: Re-enable HACS validation on pushes and pull requests**
 
 Replace the commented HACS block in `.github/workflows/validate.yml` with:

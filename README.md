@@ -66,9 +66,10 @@ The prerelease switch is not required after `v0.2.0` is promoted to a stable Git
 
 #### Rolling back
 
-Open Textbelt SMS in HACS, select **Download**, choose an earlier release under
-**Need a different version?**, and restart Home Assistant. Use **Update information**
-first if the expected release is not listed.
+Open Textbelt SMS in HACS, open its three-dot menu, select **Redownload**, and
+choose an earlier release under **Need a different version?**. Restart Home
+Assistant afterward. Use **Update information** first if the expected release is
+not listed.
 
 ### Manual Installation
 
