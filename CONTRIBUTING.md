@@ -76,6 +76,66 @@ Home Assistant instance running and already configured with the included
 [`configuration.yaml`](./config/configuration.yaml)
 file.
 
+## Publishing releases
+
+Merging a version bump does not publish a GitHub release. Run the Release workflow
+after merge and verify publication before announcing that version as available in HACS.
+
+1. Merge the version change into `main` and confirm lint, unit tests, the local
+   Textbelt stub/HA smoke test, Hassfest, and HACS validation pass. The integration
+   manifest must contain the exact version being released, without the `v` prefix.
+2. Check the [existing tags](https://github.com/stroodle96/textbelt-sms/tags) and
+   [releases](https://github.com/stroodle96/textbelt-sms/releases). Never move or
+   recreate an existing release tag. If a tag exists without a release, investigate
+   the incomplete publication before retrying.
+3. From GitHub **Actions → Release → Run workflow**, select `main`, enter the
+   manifest version, and explicitly select `prerelease`. For example:
+
+   ```sh
+   gh workflow run release.yml --repo stroodle96/textbelt-sms --ref main -f version=0.2.0 -f channel=prerelease
+   ```
+
+4. Wait for both **Verify release** and **Publish release** to succeed. Check the
+   published release is not a draft, is marked as a prerelease, and its tag resolves
+   to the successful workflow run's tested commit. Confirm the tagged manifest has
+   the requested version. Record the release ID and resolved tag SHA for promotion:
+
+   ```sh
+   gh api repos/stroodle96/textbelt-sms/releases/tags/v0.2.0 --jq '{id,tag_name,draft,prerelease,html_url}'
+   gh api repos/stroodle96/textbelt-sms/git/ref/tags/v0.2.0 --jq '{ref,object}'
+   gh api 'repos/stroodle96/textbelt-sms/contents/custom_components/textbelt_sms/manifest.json?ref=v0.2.0' -H 'Accept: application/vnd.github.raw+json'
+   ```
+
+5. Verify installation through HACS with prerelease access enabled: select
+   **Update information**, download the published version, check the installed
+   manifest, restart Home Assistant, and confirm the integration loads. The local
+   HA smoke harness tests the checked-out code; it does not prove HACS discovery
+   or installation. Routine SMS behavior checks use the local Textbelt stub.
+6. After the HACS check passes, promote the same release by dispatching **Release**
+   from `main` with the same version and `stable`. Main's manifest must still
+   contain that version. The workflow retests the immutable tagged code before
+   promotion; it does not move the tag:
+
+   ```sh
+   gh workflow run release.yml --repo stroodle96/textbelt-sms --ref main -f version=0.2.0 -f channel=stable
+   ```
+
+7. Verify the release is non-draft and stable, its ID and resolved tag SHA are
+   unchanged, and GitHub identifies it as the latest release. Turn off the HACS
+   prerelease switch, refresh information, and confirm the stable version remains
+   downloadable:
+
+   ```sh
+   gh api repos/stroodle96/textbelt-sms/releases/tags/v0.2.0 --jq '{id,tag_name,draft,prerelease,html_url}'
+   gh api repos/stroodle96/textbelt-sms/git/ref/tags/v0.2.0 --jq '{ref,object}'
+   gh api repos/stroodle96/textbelt-sms/releases/latest --jq .tag_name
+   ```
+
+Replace `0.2.0` and `v0.2.0` in these examples for subsequent releases. Stop on a
+failed validation or publication step and inspect its logs before retrying.
+GitHub-generated source archives are sufficient; no custom ZIP asset is required.
+Keep earlier releases for rollback, including the historical `v0.1.0` prerelease.
+
 ## License
 
 By contributing, you agree that your contributions will be licensed under its MIT License.
