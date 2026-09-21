@@ -45,6 +45,12 @@ This custom component integrates the [Textbelt SMS API](https://textbelt.com/) i
 
 ### HACS custom repository (recommended)
 
+Requires **Home Assistant 2026.8.2 or newer** and **HACS 2.0.1 or newer**.
+
+Selectable versions come from [published GitHub releases](https://github.com/stroodle96/textbelt-sms/releases).
+A version bump merged into the repository becomes available as a release only after
+the maintainer runs the [Release workflow](https://github.com/stroodle96/textbelt-sms/actions/workflows/release.yml).
+
 1. Install and configure [HACS](https://www.hacs.xyz/) if it is not already available.
 2. Open HACS, open the menu, and select **Custom repositories**.
 3. Enter `https://github.com/stroodle96/textbelt-sms`, select **Integration**, and add the repository.
@@ -54,22 +60,31 @@ This custom component integrates the [Textbelt SMS API](https://textbelt.com/) i
 
 #### Installing a prerelease
 
-HACS excludes GitHub prereleases by default. To install `v0.2.0` while it is marked as a prerelease:
+HACS excludes GitHub prereleases from normal update selection by default. To enable prerelease updates for Textbelt SMS:
 
 1. Go to **Settings → Devices & services → HACS → Entities**.
 2. Show disabled entities and enable the prerelease switch associated with Textbelt SMS.
 3. Turn the switch on.
 4. In HACS, open Textbelt SMS and select **Update information**.
-5. Download Textbelt SMS and select `v0.2.0` under **Need a different version?**.
+5. Download Textbelt SMS and select the desired published prerelease under **Need a different version?**.
 
-The prerelease switch is not required after `v0.2.0` is promoted to a stable GitHub release.
+Stable releases do not require the prerelease switch.
+
+#### A published version is missing
+
+Check the [Releases page](https://github.com/stroodle96/textbelt-sms/releases) first.
+If the version has not been published, refreshing HACS cannot make it available.
+If it exists, open Textbelt SMS, select **Update information** from its three-dot
+menu, then reopen **Download** or **Redownload**. Check prerelease access and the
+minimum Home Assistant/HACS versions if it is still missing.
 
 #### Rolling back
 
 Open Textbelt SMS in HACS, open its three-dot menu, select **Redownload**, and
 choose an earlier release under **Need a different version?**. Restart Home
 Assistant afterward. Use **Update information** first if the expected release is
-not listed.
+not listed. The historical `v0.1.0` release is marked as a prerelease, so beta
+access may be needed to select it.
 
 ### Manual Installation
 
