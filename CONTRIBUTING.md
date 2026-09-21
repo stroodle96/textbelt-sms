@@ -123,7 +123,8 @@ after merge and verify publication before announcing that version as available i
 7. Verify the release is non-draft and stable, its ID and resolved tag SHA are
    unchanged, and GitHub identifies it as the latest release. Turn off the HACS
    prerelease switch, refresh information, and confirm the stable version remains
-   downloadable:
+   downloadable. Install it with prereleases disabled, check the installed manifest
+   version, restart Home Assistant, and confirm the integration loads:
 
    ```sh
    gh api repos/stroodle96/textbelt-sms/releases/tags/v0.2.0 --jq '{id,tag_name,draft,prerelease,html_url}'
