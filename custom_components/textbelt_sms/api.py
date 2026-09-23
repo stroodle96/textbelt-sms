@@ -125,3 +125,36 @@ class TextbeltApiClient:
         except (aiohttp.ClientError, TimeoutError) as err:
             msg = f"Network error: {err}"
             raise TextbeltApiClientCommunicationError(msg) from err
+
+    async def async_get_quota(self) -> int:
+        """Return remaining credits for the configured key without sending SMS."""
+        base_url = self._endpoint.removesuffix("/text")
+        endpoint = f"{base_url}/quota/{quote(self._api_key, safe='')}"
+        try:
+            async with self._session.get(
+                endpoint,
+                timeout=aiohttp.ClientTimeout(total=10),
+                allow_redirects=False,
+            ) as response:
+                if response.status in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}:
+                    raise TextbeltApiClientAuthenticationError(AUTHENTICATION_ERROR)
+                if response.status != HTTPStatus.OK:
+                    msg = f"Textbelt quota API returned HTTP {response.status}."
+                    raise TextbeltApiClientError(msg)
+                try:
+                    data = await response.json()
+                except (aiohttp.ClientError, TypeError, ValueError):
+                    # Exceptions can contain the URL, whose path includes the key.
+                    raise TextbeltApiClientError(INVALID_RESPONSE_ERROR) from None
+                if not isinstance(data, dict):
+                    raise TextbeltApiClientError(INVALID_RESPONSE_ERROR)
+                if data.get("success") is not True:
+                    msg = "Textbelt could not look up the configured API key quota."
+                    raise TextbeltApiClientError(msg)
+                quota = data.get("quotaRemaining")
+                if not isinstance(quota, int) or isinstance(quota, bool) or quota < 0:
+                    raise TextbeltApiClientError(INVALID_RESPONSE_ERROR)
+                return quota
+        except (aiohttp.ClientError, TimeoutError):
+            msg = "Network error while fetching Textbelt quota."
+            raise TextbeltApiClientCommunicationError(msg) from None

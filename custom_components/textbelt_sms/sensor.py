@@ -1,5 +1,5 @@
 # Copyright (c) 2019 - 2025  Joakim Sørensen @ludeeus
-"""Textbelt message status sensor."""
+"""Textbelt message status and remaining quota sensors."""
 
 from __future__ import annotations
 
@@ -8,7 +8,11 @@ from datetime import timedelta
 from enum import StrEnum
 from typing import TYPE_CHECKING, ClassVar
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
@@ -29,6 +33,7 @@ from .const import (
 )
 
 INACTIVE_COORDINATOR_ERROR = "Textbelt SMS status coordinator is inactive"
+INACTIVE_QUOTA_ERROR = "Textbelt SMS quota coordinator is inactive"
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -122,8 +127,15 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the last-message status sensor."""
-    async_add_entities([LastMessageStatusSensor(entry.runtime_data.coordinator, entry)])
+    """Set up status and quota, even when the initial quota lookup fails."""
+    quota_coordinator = entry.runtime_data.quota_coordinator
+    await quota_coordinator.async_refresh()
+    async_add_entities(
+        [
+            LastMessageStatusSensor(entry.runtime_data.coordinator, entry),
+            QuotaRemainingSensor(quota_coordinator, entry),
+        ]
+    )
 
 
 class LastMessageStatusSensor(
@@ -172,3 +184,63 @@ class LastMessageStatusSensor(
             ATTR_PHONE: message.phone if message else None,
             ATTR_MESSAGE: message.message if message else None,
         }
+
+
+class TextbeltQuotaCoordinator(DataUpdateCoordinator[int]):
+    """Poll the configured API key's balance independently of message status."""
+
+    def __init__(
+        self, hass: HomeAssistant, client: TextbeltApiClient, entry: ConfigEntry
+    ) -> None:
+        """Initialize the quota coordinator."""
+        self.client = client
+        self._active = True
+        super().__init__(
+            hass,
+            LOGGER,
+            name="Textbelt SMS quota",
+            config_entry=entry,
+            update_interval=timedelta(minutes=5),
+            always_update=False,
+        )
+
+    async def _async_update_data(self) -> int:
+        """Fetch credits, preserving the last reading on a transient failure."""
+        if not self._active:
+            raise UpdateFailed(INACTIVE_QUOTA_ERROR)
+        try:
+            quota = await self.client.async_get_quota()
+        except TextbeltApiClientError as err:
+            msg = "Unable to fetch Textbelt remaining quota"
+            raise UpdateFailed(msg) from err
+        if not self._active:
+            raise UpdateFailed(INACTIVE_QUOTA_ERROR)
+        return quota
+
+    async def async_shutdown(self) -> None:
+        """Deactivate before cancelling scheduled refreshes."""
+        self._active = False
+        await super().async_shutdown()
+
+
+class QuotaRemainingSensor(CoordinatorEntity[TextbeltQuotaCoordinator], SensorEntity):
+    """Expose remaining SMS credits as a numeric sensor."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Quota Remaining"
+    _attr_icon = "mdi:message-text-outline"
+    _attr_native_unit_of_measurement = "credits"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(
+        self, coordinator: TextbeltQuotaCoordinator, entry: ConfigEntry
+    ) -> None:
+        """Initialize the quota entity without exposing the API key."""
+        super().__init__(coordinator)
+        self.entity_id = "sensor.textbelt_sms_quota_remaining"
+        self._attr_unique_id = f"{entry.entry_id}_quota_remaining"
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the provider's current remaining credit balance."""
+        return self.coordinator.data

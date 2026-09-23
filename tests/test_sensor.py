@@ -165,11 +165,15 @@ class SetupResponse:
 
     async def json(self) -> dict[str, bool | int]:
         """Return a successful numeric-ID response."""
-        return {"success": True, "textId": 1}
+        return {"success": True, "textId": 1, "quotaRemaining": 98}
 
 
 class SetupSession:
     """Minimal HTTP session for platform setup."""
+
+    def get(self, _url: str, **_kwargs: object) -> SetupResponse:
+        """Return a successful quota response."""
+        return SetupResponse()
 
     def post(self, _url: str, *, data: dict[str, str]) -> SetupResponse:
         """Return a successful response."""
