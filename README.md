@@ -111,6 +111,24 @@ The integration provides a service `textbelt_sms.send_sms` with the following pa
 | phone     | Yes      | Phone number in international format (e.g., +1234567890) |
 | message   | Yes      | The message text to send |
 
+### Remaining SMS quota
+
+`sensor.textbelt_sms_quota_remaining` shows the remaining SMS credits for the API
+key configured in this integration. It reads Textbelt's
+[credit balance endpoint](https://docs.textbelt.com/other-api-endpoints#checking-your-credit-balance)
+at startup, every five minutes, and after an SMS send attempt. Closely spaced
+refresh requests are coalesced by Home Assistant and may take a few seconds.
+Quota checks do not send an SMS.
+
+The sensor uses the unit `credits`; a value of `0` means no credits remain. If the
+lookup fails, the sensor becomes `unavailable` and retries automatically. SMS
+sending and delivery-status tracking remain operational. The API key is not
+included in the entity ID, attributes, or quota error messages.
+
+Use this sensor in dashboards or a numeric-state automation to alert when credits
+run low. To refresh after purchasing credits, call `homeassistant.update_entity`
+with `entity_id: sensor.textbelt_sms_quota_remaining`.
+
 ### Example Automation
 
 ```yaml

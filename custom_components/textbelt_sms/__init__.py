@@ -22,7 +22,7 @@ from homeassistant.helpers.network import NoURLAvailableError, get_url
 
 from .api import TextbeltApiClient, TextbeltApiClientError, normalize_text_id
 from .const import DOMAIN, EVENT_REPLY, LOGGER, SERVICE_SEND_SMS, WEBHOOK_ID
-from .sensor import TextbeltStatusCoordinator
+from .sensor import TextbeltQuotaCoordinator, TextbeltStatusCoordinator
 
 if TYPE_CHECKING:
     from aiohttp import web
@@ -84,6 +84,7 @@ class TextbeltRuntimeData:
 
     client: TextbeltApiClient
     coordinator: TextbeltStatusCoordinator
+    quota_coordinator: TextbeltQuotaCoordinator
     send_lock: asyncio.Lock
     active: bool = True
 
@@ -118,7 +119,10 @@ async def async_setup_entry(  # noqa: PLR0915
         hass.bus.async_fire(EVENT_REPLY, data)
 
     coordinator = TextbeltStatusCoordinator(hass, client)
-    runtime = TextbeltRuntimeData(client, coordinator, asyncio.Lock())
+    quota_coordinator = TextbeltQuotaCoordinator(hass, client, entry)
+    runtime = TextbeltRuntimeData(
+        client, coordinator, quota_coordinator, asyncio.Lock()
+    )
     webhook_registered = False
     platform_setup_attempted = False
 
@@ -153,6 +157,11 @@ async def async_setup_entry(  # noqa: PLR0915
                     result = await client.async_send_sms(phone, message, webhook_url)
                 except TextbeltApiClientError:
                     _raise_action_error(SEND_ERROR)
+                finally:
+                    if runtime.active:
+                        hass.async_create_task(
+                            quota_coordinator.async_request_refresh()
+                        )
 
                 if result.get("success"):
                     try:
@@ -181,6 +190,7 @@ async def async_setup_entry(  # noqa: PLR0915
             except Exception:  # noqa: BLE001 - preserve the original setup error
                 LOGGER.exception("Failed to roll back Textbelt SMS platforms")
         await coordinator.async_shutdown()
+        await quota_coordinator.async_shutdown()
         entry.runtime_data = None
         hass.services.async_remove(DOMAIN, SERVICE_SEND_SMS)
         if webhook_registered:
@@ -198,6 +208,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if entry.runtime_data is not None:
         entry.runtime_data.active = False
         await entry.runtime_data.coordinator.async_shutdown()
+        await entry.runtime_data.quota_coordinator.async_shutdown()
     entry.runtime_data = None
     hass.services.async_remove(DOMAIN, SERVICE_SEND_SMS)
     async_unregister_webhook(hass, WEBHOOK_ID)

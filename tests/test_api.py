@@ -263,3 +263,82 @@ async def test_get_status_raises_for_timeout() -> None:
 
     with pytest.raises(TextbeltApiClientCommunicationError, match="Network error"):
         await TextbeltApiClient("secret", session).async_get_status("abc")
+
+
+@pytest.mark.parametrize("quota", [0, 98])
+async def test_get_quota_returns_balance_for_configured_key(
+    api_base_url: str, quota: int
+) -> None:
+    """Fetch numeric credit balance without sending an SMS."""
+    session = _get_session(_response(200, {"success": True, "quotaRemaining": quota}))
+    result = await TextbeltApiClient("secret/with ?#", session).async_get_quota()
+    assert result == quota
+    assert type(result) is int
+    assert session.get.call_args.args == (
+        f"{api_base_url}/quota/secret%2Fwith%20%3F%23",
+    )
+    session.post.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"success": False, "quotaRemaining": 98, "error": "secret"},
+        {"success": True},
+        {"quotaRemaining": 98},
+        {"success": True, "quotaRemaining": -1},
+        {"success": True, "quotaRemaining": True},
+        {"success": True, "quotaRemaining": "98"},
+        {"success": True, "quotaRemaining": 1.5},
+        {"success": True, "quotaRemaining": None},
+        [],
+    ],
+)
+async def test_get_quota_rejects_invalid_balances(payload: object) -> None:
+    """Provider errors and malformed balances must not become sensor readings."""
+    with pytest.raises(TextbeltApiClientError) as caught:
+        await TextbeltApiClient(
+            "secret", _get_session(_response(200, payload))
+        ).async_get_quota()
+    assert "secret" not in str(caught.value)
+
+
+@pytest.mark.parametrize("status", [301, 401, 403, 429, 500])
+async def test_get_quota_handles_http_failures(status: int) -> None:
+    """HTTP failures become safe client exceptions, without following redirects."""
+    session = _get_session(_response(status, {}))
+    expected = (
+        TextbeltApiClientAuthenticationError
+        if status in {401, 403}
+        else TextbeltApiClientError
+    )
+    with pytest.raises(expected):
+        await TextbeltApiClient("secret", session).async_get_quota()
+    assert session.get.call_args.kwargs["allow_redirects"] is False
+    assert session.get.call_args.kwargs["timeout"] == aiohttp.ClientTimeout(total=10)
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        aiohttp.ClientConnectionError("https://textbelt.com/quota/secret"),
+        TimeoutError(),
+    ],
+)
+async def test_get_quota_network_errors_do_not_expose_key(error: Exception) -> None:
+    """Network failures must not put the key-bearing URL in error messages."""
+    session = _get_session(_response(200, {}))
+    session.get.return_value.__aenter__.side_effect = error
+    with pytest.raises(TextbeltApiClientCommunicationError) as caught:
+        await TextbeltApiClient("secret", session).async_get_quota()
+    assert "secret" not in str(caught.value)
+    assert caught.value.__suppress_context__
+
+
+async def test_get_quota_rejects_invalid_json() -> None:
+    """Invalid JSON cannot become a balance or reveal the request URL."""
+    response = _response(200, {})
+    response.json.side_effect = ValueError("secret")
+    with pytest.raises(TextbeltApiClientError, match="invalid response") as caught:
+        await TextbeltApiClient("secret", _get_session(response)).async_get_quota()
+    assert caught.value.__suppress_context__

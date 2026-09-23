@@ -38,9 +38,9 @@ class _Response:
 class _StatusResponse(_Response):
     """Successful status response for coordinator refreshes."""
 
-    async def json(self) -> dict[str, str]:
-        """Return the provider status shape."""
-        return {"status": "PENDING"}
+    async def json(self) -> dict[str, str | int | bool]:
+        """Return status and quota fields for the requested endpoint."""
+        return {"status": "PENDING", "success": True, "quotaRemaining": 98}
 
 
 class _FailureResponse(_Response):
@@ -55,7 +55,7 @@ class _Session:
         self.calls.append((url, data))
         return _Response()
 
-    def get(self, _url: str) -> _StatusResponse:
+    def get(self, _url: str, **_kwargs: object) -> _StatusResponse:
         """Return a successful status response without recording a send."""
         return _StatusResponse()
 
@@ -126,7 +126,7 @@ async def test_setup_registers_service_and_stores_client(
         message="hello",
         status=MessageStatus.PENDING,
     )
-    await entry.runtime_data.coordinator.async_shutdown()
+    await async_unload_entry(hass, entry)
 
 
 async def test_service_rejects_empty_values(
@@ -143,7 +143,7 @@ async def test_service_rejects_empty_values(
         await hass.services.async_call(
             DOMAIN, SERVICE_SEND_SMS, {"phone": "+1", "message": ""}, blocking=True
         )
-    await entry.runtime_data.coordinator.async_shutdown()
+    await async_unload_entry(hass, entry)
 
 
 async def test_service_sends_reply_webhook_field(
@@ -237,7 +237,7 @@ async def test_overlapping_sends_commit_in_call_order(
     assert entry.runtime_data.coordinator.data == LastMessage(
         "2", "+2", "second", MessageStatus.PENDING
     )
-    await entry.runtime_data.coordinator.async_shutdown()
+    await async_unload_entry(hass, entry)
 
 
 async def test_setup_rolls_back_when_platform_forwarding_fails(
@@ -297,7 +297,7 @@ async def test_service_exposes_textbelt_failure_as_homeassistant_error(
         await hass.services.async_call(
             DOMAIN, SERVICE_SEND_SMS, {"phone": "+1", "message": "hello"}, blocking=True
         )
-    await entry.runtime_data.coordinator.async_shutdown()
+    await async_unload_entry(hass, entry)
 
 
 async def test_unload_removes_service_webhook_and_client(
@@ -334,7 +334,7 @@ async def test_reload_replaces_service_and_client(
 
     assert hass.services.has_service(DOMAIN, SERVICE_SEND_SMS)
     assert entry.runtime_data is not None
-    await entry.runtime_data.coordinator.async_shutdown()
+    await async_unload_entry(hass, entry)
 
 
 async def test_reply_webhook_fires_event_without_logging_payload(
@@ -363,4 +363,4 @@ async def test_reply_webhook_fires_event_without_logging_payload(
     await hass.async_block_till_done()
 
     assert events == [{"from": "+1", "text": "reply"}]
-    await entry.runtime_data.coordinator.async_shutdown()
+    await async_unload_entry(hass, entry)

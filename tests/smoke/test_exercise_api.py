@@ -5,12 +5,10 @@ from __future__ import annotations
 
 import sys
 from io import BytesIO
-from typing import TYPE_CHECKING
+
+import pytest
 
 from tests.smoke import exercise_api
-
-if TYPE_CHECKING:
-    import pytest
 
 
 def test_call_accepts_successful_empty_response(
@@ -111,3 +109,41 @@ def test_failure_mode_calls_existing_entry_service_without_config_flow(
         "http://127.0.0.1:8123/api/services/textbelt_sms/send_sms",
     ]
     assert calls[-1]["token"] == "existing-token"  # noqa: S105
+
+
+@pytest.mark.parametrize("restart", [False, True])
+def test_live_smoke_does_not_assume_stub_quota(
+    monkeypatch: pytest.MonkeyPatch, *, restart: bool
+) -> None:
+    """A real _test key may have any quota or no quota lookup support."""
+    calls: list[str] = []
+
+    def fake_call(
+        url: str, _token: str = "", _method: str = "GET", _payload: dict | None = None
+    ) -> dict | list:
+        calls.append(url)
+        if url.endswith("/api/config/config_entries/entry"):
+            return [{"domain": "textbelt_sms", "state": "loaded"}]
+        if url.endswith("/api/services"):
+            return [{"domain": "textbelt_sms", "services": {"send_sms": {}}}]
+        if url.endswith("/api/config/config_entries/flow"):
+            return {"flow_id": "test-flow"}
+        if url.endswith("/api/config/config_entries/flow/test-flow"):
+            return {"type": "create_entry"}
+        if url.endswith("/api/services/textbelt_sms/send_sms"):
+            return []
+        message = f"Live smoke unexpectedly depended on stub or sensor state: {url}"
+        raise AssertionError(message)
+
+    monkeypatch.setenv("LIVE_SMOKE", "1")
+    monkeypatch.setattr(exercise_api, "call", fake_call)
+    monkeypatch.setattr(exercise_api, "wait_for_ha", lambda _base: None)
+    monkeypatch.setattr(exercise_api, "bootstrap_token", lambda _base: "test-token")
+    args = ["exercise_api.py", "--api-key", "provider_test"]
+    if restart:
+        args.extend(["--token", "test-token", "--verify-runtime"])
+    monkeypatch.setattr(sys, "argv", args)
+
+    exercise_api.main()
+
+    assert "http://127.0.0.1:8123/api/services/textbelt_sms/send_sms" in calls

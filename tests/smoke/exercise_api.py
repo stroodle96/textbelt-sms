@@ -16,6 +16,7 @@ class SmokeError(RuntimeError):
 
 
 HA_CLIENT_ID = "http://home-assistant.io"
+QUOTA_ENTITY = "sensor.textbelt_sms_quota_remaining"
 
 
 def call(
@@ -44,16 +45,21 @@ def call(
 
 def stub_call(stub: str, path: str) -> dict:
     """Change or inspect the deterministic local Textbelt stub."""
-    method = "POST" if path.startswith(("/mode/", "/status/")) else "GET"
+    method = (
+        "POST" if path.startswith(("/mode/", "/status/", "/quota-mode/")) else "GET"
+    )
     return call(f"{stub}{path}", method=method)
 
 
-def wait_for_state(base: str, token: str, expected: str) -> None:
+def wait_for_state(
+    base: str,
+    token: str,
+    expected: str,
+    entity_id: str = "sensor.textbelt_sms_last_message_status",
+) -> None:
     """Wait for a sensor state after requesting a coordinator refresh."""
     for _ in range(30):
-        state = call(
-            f"{base}/api/states/sensor.textbelt_sms_last_message_status", token
-        )
+        state = call(f"{base}/api/states/{entity_id}", token)
         if state.get("state") == expected:
             return
         time.sleep(1)
@@ -167,6 +173,29 @@ def exercise_service(
             raise SmokeError(message)
 
 
+def exercise_quota_recovery(base: str, token: str, stub: str) -> None:
+    """Verify quota availability recovers after an independent lookup failure."""
+    for mode, expected in (("failure", "unavailable"), ("success", "97")):
+        stub_call(stub, f"/quota-mode/{mode}")
+        call(
+            f"{base}/api/services/homeassistant/update_entity",
+            token,
+            "POST",
+            {"entity_id": QUOTA_ENTITY},
+        )
+        wait_for_state(base, token, expected, QUOTA_ENTITY)
+
+
+def exercise_restart(base: str, token: str, *, use_stub: bool) -> None:
+    """Verify runtime and sending after restart, with local quota assertions."""
+    assert_runtime(base, token)
+    if use_stub:
+        wait_for_state(base, token, "97", QUOTA_ENTITY)
+    exercise_service(base, token, "restart-smoke")
+    if use_stub:
+        wait_for_state(base, token, "96", QUOTA_ENTITY)
+
+
 def main() -> None:
     """Run the onboarding, config-entry, service, and webhook smoke checks."""
     parser = argparse.ArgumentParser()
@@ -183,6 +212,7 @@ def main() -> None:
     parser.add_argument("--verify-runtime", action="store_true")
     parser.add_argument("--refresh-only", action="store_true")
     args = parser.parse_args()
+    use_stub = os.environ.get("LIVE_SMOKE") != "1"
     if args.failure and not args.token:
         parser.error("--failure requires --token from the initial smoke run")
     wait_for_ha(args.base)
@@ -205,16 +235,18 @@ def main() -> None:
         wait_for_state(args.base, token, "delivered")
         return
     if args.verify_runtime:
-        assert_runtime(args.base, token)
-        exercise_service(args.base, token, "restart-smoke")
+        exercise_restart(args.base, token, use_stub=use_stub)
         return
     if args.failure:
         assert_runtime(args.base, token)
         exercise_service(args.base, token, "smoke", expect_failure=True)
         return
     configure_entry(args.base, token, args.api_key)
+    assert_runtime(args.base, token)
+    if use_stub:
+        wait_for_state(args.base, token, "98", QUOTA_ENTITY)
     exercise_service(args.base, token, "smoke")
-    if not args.failure:
+    if use_stub:
         requests = call(f"{args.stub}/requests").get("requests", [])
         expected_request = {
             "phone": "+15551234567",
@@ -226,6 +258,8 @@ def main() -> None:
         )
         if len(requests) != 1 or requests[0] != expected_request:
             raise SmokeError(f"Unexpected Textbelt stub request: {requests}")
+        wait_for_state(args.base, token, "97", QUOTA_ENTITY)
+        exercise_quota_recovery(args.base, token, args.stub)
         wait_for_state(args.base, token, "pending")
         stub_call(args.stub, "/status/delivered")
         call(
