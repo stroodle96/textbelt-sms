@@ -166,3 +166,19 @@ Check Home Assistant logs for detailed error messages. Common issues:
 ## License
 
 This project is licensed under MIT License - see the [LICENSE](LICENSE) file for details.
+
+### Message preparation and long alerts
+
+The `textbelt_sms.send_sms` action preserves newlines and prepares readable
+Markdown/HTML text using the reviewed 124-character GSM policy. Smart quotes,
+bullets and long dashes receive readable substitutions; unsupported content
+(such as emoji or unreviewed scripts) produces a visible action error before
+sending. Empty messages also fail before sending.
+
+Long alerts split at sentence or word boundaries where possible, with `(1/N)`
+labels. Each part includes at most 160 GSM septets, including labels, and one
+alert may use at most five parts. Larger automation alerts fail before any part
+is sent. Extension characters count as two septets. These are integration
+budgets; Textbelt's true request maximum remains unknown. Textbelt may append
+sender or STOP text and charge additional credits. The observed character
+trial covered one account and US/T-Mobile, not all carriers.

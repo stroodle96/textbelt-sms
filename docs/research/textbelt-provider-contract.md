@@ -60,3 +60,13 @@ Do not overwrite historical inputs or infer production acceptance from stubs.
 Root review of the explicit 124-character proposal is pending. Five copied boundary payloads match exactly; ten copies and handset segmentation remain unresolved. Provider hard maximum/unit, reply lifetime/unique inbound
 IDs, callback acknowledgment/retries, HELP and idempotency remain unknown. No
 further sends or budget request. The separate-time MMS investigation is stopped.
+
+## Stage 1 approval: October 1, 2026
+
+The user approved Stage 1 and the reviewed 124-character policy. The separate
+[v2 approved policy](probes/v2-character-policy-approved.json) activates the same
+per-character evidence and weights; historical observed and proposal artifacts
+remain unchanged. Product preparation uses 160 septets including generated labels
+and a maximum five parts. These are integration budgets, not a provider hard
+maximum or universal carrier support. Provider-added sender/STOP text can add
+credits. Unsupported meaningful content fails explicitly before any POST.

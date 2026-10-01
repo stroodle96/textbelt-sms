@@ -26,6 +26,10 @@ class TextbeltApiClientCommunicationError(TextbeltApiClientError):
     """Exception to indicate a communication error."""
 
 
+class TextbeltApiClientUnknownOutcomeError(TextbeltApiClientCommunicationError):
+    """A send may have been accepted; automatic retry risks duplication."""
+
+
 class TextbeltApiClientAuthenticationError(TextbeltApiClientError):
     """Exception to indicate an authentication error."""
 
@@ -83,25 +87,48 @@ class TextbeltApiClient:
         if webhook_url:
             payload["replyWebhookUrl"] = webhook_url
         try:
-            async with self._session.post(self._endpoint, data=payload) as response:
+            async with self._session.post(
+                self._endpoint,
+                data=payload,
+                timeout=aiohttp.ClientTimeout(total=20),
+                allow_redirects=False,
+            ) as response:
                 if response.status in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}:
                     raise TextbeltApiClientAuthenticationError(AUTHENTICATION_ERROR)
+                if (
+                    HTTPStatus.MULTIPLE_CHOICES
+                    <= response.status
+                    < HTTPStatus.BAD_REQUEST
+                    or response.status >= HTTPStatus.INTERNAL_SERVER_ERROR
+                ):
+                    msg = f"Textbelt send outcome unknown (HTTP {response.status})."
+                    raise TextbeltApiClientUnknownOutcomeError(msg)
                 if response.status >= HTTPStatus.BAD_REQUEST:
                     msg = f"Textbelt API returned HTTP {response.status}."
                     raise TextbeltApiClientError(msg)
                 try:
                     data = await response.json()
-                except (aiohttp.ClientError, TypeError, ValueError) as err:
-                    raise TextbeltApiClientError(INVALID_RESPONSE_ERROR) from err
+                except (aiohttp.ClientError, TypeError, ValueError):
+                    raise TextbeltApiClientUnknownOutcomeError(
+                        INVALID_RESPONSE_ERROR
+                    ) from None
                 if not isinstance(data, dict):
-                    raise TextbeltApiClientError(INVALID_RESPONSE_ERROR)
-                if not data.get("success", False):
-                    msg = data.get("error", "Unknown error from Textbelt API.")
-                    raise TextbeltApiClientError(str(msg))
+                    raise TextbeltApiClientUnknownOutcomeError(INVALID_RESPONSE_ERROR)
+                if data.get("success") is False:
+                    msg = "Textbelt rejected the SMS request."
+                    raise TextbeltApiClientError(msg)
+                if data.get("success") is not True:
+                    raise TextbeltApiClientUnknownOutcomeError(INVALID_RESPONSE_ERROR)
+                try:
+                    data["textId"] = normalize_text_id(data.get("textId"))
+                except TextbeltTextIdError:
+                    raise TextbeltApiClientUnknownOutcomeError(
+                        INVALID_RESPONSE_ERROR
+                    ) from None
                 return data
-        except (aiohttp.ClientError, TimeoutError) as err:
-            msg = f"Network error: {err}"
-            raise TextbeltApiClientCommunicationError(msg) from err
+        except (aiohttp.ClientError, TimeoutError):
+            msg = "Network error while sending Textbelt SMS; outcome unknown."
+            raise TextbeltApiClientUnknownOutcomeError(msg) from None
 
     async def async_get_status(self, text_id: int | str) -> dict[str, Any]:
         """Return the delivery status for a previously sent message."""
@@ -109,22 +136,24 @@ class TextbeltApiClient:
         base_url = self._endpoint.removesuffix("/text")
         endpoint = f"{base_url}/status/{quote(normalized_text_id, safe='')}"
         try:
-            async with self._session.get(endpoint) as response:
+            async with self._session.get(
+                endpoint, timeout=aiohttp.ClientTimeout(total=10), allow_redirects=False
+            ) as response:
                 if response.status in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}:
                     raise TextbeltApiClientAuthenticationError(AUTHENTICATION_ERROR)
-                if response.status >= HTTPStatus.BAD_REQUEST:
+                if response.status != HTTPStatus.OK:
                     msg = f"Textbelt API returned HTTP {response.status}."
                     raise TextbeltApiClientError(msg)
                 try:
                     data = await response.json()
-                except (aiohttp.ClientError, TypeError, ValueError) as err:
-                    raise TextbeltApiClientError(INVALID_RESPONSE_ERROR) from err
+                except (aiohttp.ClientError, TypeError, ValueError):
+                    raise TextbeltApiClientError(INVALID_RESPONSE_ERROR) from None
                 if not isinstance(data, dict):
                     raise TextbeltApiClientError(INVALID_RESPONSE_ERROR)
                 return data
-        except (aiohttp.ClientError, TimeoutError) as err:
-            msg = f"Network error: {err}"
-            raise TextbeltApiClientCommunicationError(msg) from err
+        except (aiohttp.ClientError, TimeoutError):
+            msg = "Network error while fetching Textbelt status."
+            raise TextbeltApiClientCommunicationError(msg) from None
 
     async def async_get_quota(self) -> int:
         """Return remaining credits for the configured key without sending SMS."""

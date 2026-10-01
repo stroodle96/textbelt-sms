@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, NoReturn
 
@@ -20,11 +19,15 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.network import NoURLAvailableError, get_url
 
-from .api import TextbeltApiClient, TextbeltApiClientError, normalize_text_id
+from .api import TextbeltApiClient
 from .const import DOMAIN, EVENT_REPLY, LOGGER, SERVICE_SEND_SMS, WEBHOOK_ID
+from .models import MessagePreparationError
+from .sender import SendResult, TextbeltSender
 from .sensor import TextbeltQuotaCoordinator, TextbeltStatusCoordinator
 
 if TYPE_CHECKING:
+    import asyncio
+
     from aiohttp import web
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant, ServiceCall
@@ -40,8 +43,6 @@ SERVICE_SCHEMA = vol.Schema(
 )
 MISSING_FIELDS_ERROR = "Phone and message are required"
 SEND_ERROR = "Unable to send SMS via Textbelt"
-FAILED_SEND_ERROR = "Textbelt did not send the SMS"
-MISSING_TEXT_ID_ERROR = "Textbelt response did not include a text ID"
 
 
 def _raise_action_error(message: str) -> NoReturn:
@@ -85,6 +86,7 @@ class TextbeltRuntimeData:
     client: TextbeltApiClient
     coordinator: TextbeltStatusCoordinator
     quota_coordinator: TextbeltQuotaCoordinator
+    sender: TextbeltSender
     send_lock: asyncio.Lock
     active: bool = True
 
@@ -120,8 +122,16 @@ async def async_setup_entry(  # noqa: PLR0915
 
     coordinator = TextbeltStatusCoordinator(hass, client)
     quota_coordinator = TextbeltQuotaCoordinator(hass, client, entry)
+
+    def publish_result(result: SendResult, phone: str, message: str) -> None:
+        if runtime.active:
+            coordinator.set_last_batch(result, phone, message)
+            if result.text_ids:
+                hass.async_create_task(coordinator.async_request_refresh())
+
+    sender = TextbeltSender(client, on_result=publish_result)
     runtime = TextbeltRuntimeData(
-        client, coordinator, quota_coordinator, asyncio.Lock()
+        client, coordinator, quota_coordinator, sender, sender.lock
     )
     webhook_registered = False
     platform_setup_attempted = False
@@ -150,30 +160,22 @@ async def async_setup_entry(  # noqa: PLR0915
             if not phone or not message:
                 _raise_action_error(MISSING_FIELDS_ERROR)
 
-            async with runtime.send_lock:
-                if not runtime.active:
-                    _raise_action_error(SEND_ERROR)
-                try:
-                    result = await client.async_send_sms(phone, message, webhook_url)
-                except TextbeltApiClientError:
-                    _raise_action_error(SEND_ERROR)
-                finally:
-                    if runtime.active:
-                        hass.async_create_task(
-                            quota_coordinator.async_request_refresh()
-                        )
-
-                if result.get("success"):
-                    try:
-                        text_id = normalize_text_id(result.get("textId"))
-                    except ValueError:
-                        _raise_action_error(MISSING_TEXT_ID_ERROR)
-                    if not runtime.active:
-                        return
-                    coordinator.set_last_message(text_id, phone, message)
-                    hass.async_create_task(coordinator.async_request_refresh())
-                    return
-                _raise_action_error(FAILED_SEND_ERROR)
+            if not runtime.active:
+                _raise_action_error(SEND_ERROR)
+            try:
+                result = await sender.async_send(
+                    phone, message, webhook_url=webhook_url
+                )
+            except MessagePreparationError as err:
+                _raise_action_error(str(err))
+            finally:
+                if runtime.active:
+                    hass.async_create_task(quota_coordinator.async_request_refresh())
+            if result.outcome != "accepted":
+                _raise_action_error(
+                    f"Textbelt SMS {result.outcome}: "
+                    f"{result.accepted_parts}/{result.total_parts} parts accepted"
+                )
 
         # Register the send_sms service.
         LOGGER.debug("Registering send_sms service")
@@ -184,6 +186,7 @@ async def async_setup_entry(  # noqa: PLR0915
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     except Exception:
         runtime.active = False
+        sender.shutdown()
         if platform_setup_attempted:
             try:
                 await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
@@ -207,6 +210,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return False
     if entry.runtime_data is not None:
         entry.runtime_data.active = False
+        entry.runtime_data.sender.shutdown()
         await entry.runtime_data.coordinator.async_shutdown()
         await entry.runtime_data.quota_coordinator.async_shutdown()
     entry.runtime_data = None

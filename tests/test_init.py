@@ -51,7 +51,7 @@ class _Session:
     def __init__(self) -> None:
         self.calls: list[tuple[str, dict[str, str]]] = []
 
-    def post(self, url: str, *, data: dict[str, str]) -> _Response:
+    def post(self, url: str, *, data: dict[str, str], **_kwargs: object) -> _Response:
         self.calls.append((url, data))
         return _Response()
 
@@ -61,7 +61,7 @@ class _Session:
 
 
 class _FailureSession(_Session):
-    def post(self, url: str, *, data: dict[str, str]) -> _Response:
+    def post(self, url: str, *, data: dict[str, str], **_kwargs: object) -> _Response:
         self.calls.append((url, data))
         return _FailureResponse()
 
@@ -125,6 +125,8 @@ async def test_setup_registers_service_and_stores_client(
         phone="+15551234567",
         message="hello",
         status=MessageStatus.PENDING,
+        text_ids=("123",),
+        part_statuses=(MessageStatus.PENDING,),
     )
     await async_unload_entry(hass, entry)
 
@@ -235,7 +237,7 @@ async def test_overlapping_sends_commit_in_call_order(
 
     assert calls == ["first", "second"]
     assert entry.runtime_data.coordinator.data == LastMessage(
-        "2", "+2", "second", MessageStatus.PENDING
+        "2", "+2", "second", MessageStatus.PENDING, ("2",), (MessageStatus.PENDING,)
     )
     await async_unload_entry(hass, entry)
 
@@ -363,4 +365,140 @@ async def test_reply_webhook_fires_event_without_logging_payload(
     await hass.async_block_till_done()
 
     assert events == [{"from": "+1", "text": "reply"}]
+    await async_unload_entry(hass, entry)
+
+
+async def test_service_prepares_multipart_and_exposes_rejected_attempt(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Service shares preparation and records the entire last attempt."""
+    monkeypatch.setattr(
+        "custom_components.textbelt_sms.async_get_clientsession", lambda _: _Session()
+    )
+    entry = _entry()
+    await async_setup_entry(hass, entry)
+    post = AsyncMock(
+        side_effect=[
+            {"success": True, "textId": "one"},
+            {"success": True, "textId": "two"},
+            {"success": False},
+        ]
+    )
+    entry.runtime_data.client.async_send_sms = post
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_SEND_SMS,
+        {"phone": "legacy phone", "message": "a" * 200},
+        blocking=True,
+    )
+    assert entry.runtime_data.coordinator.data.text_ids == ("one", "two")
+    expected_parts = 2
+    assert post.await_count == expected_parts
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_SEND_SMS,
+            {"phone": "+1", "message": "rejected"},
+            blocking=True,
+        )
+    assert entry.runtime_data.coordinator.data.status == MessageStatus.FAILED
+    assert entry.runtime_data.coordinator.data.text_ids == ()
+    await async_unload_entry(hass, entry)
+
+
+async def test_unload_during_multipart_prevents_next_post_and_stale_publish(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An accepted in-flight part is retained without mutating unloaded sensors."""
+    monkeypatch.setattr(
+        "custom_components.textbelt_sms.async_get_clientsession", lambda _: _Session()
+    )
+    entry = _entry()
+    await async_setup_entry(hass, entry)
+    runtime = entry.runtime_data
+    started, release = asyncio.Event(), asyncio.Event()
+
+    async def post(_phone: str, _message: str, _webhook: str | None = None) -> dict:
+        started.set()
+        await release.wait()
+        return {"success": True, "textId": "one"}
+
+    runtime.client.async_send_sms = AsyncMock(side_effect=post)
+    task = asyncio.create_task(
+        hass.services.async_call(
+            DOMAIN,
+            SERVICE_SEND_SMS,
+            {"phone": "+1", "message": "a" * 400},
+            blocking=True,
+        )
+    )
+    await started.wait()
+    await async_unload_entry(hass, entry)
+    release.set()
+    with pytest.raises(HomeAssistantError):
+        await task
+    assert runtime.sender.last_result.text_ids == ("one",)
+    assert runtime.sender.last_result.outcome == "partial"
+    assert runtime.coordinator.data is None
+    runtime.client.async_send_sms.assert_awaited_once()
+
+
+async def test_service_cancellation_keeps_accepted_ids_as_unknown(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Cancellation preserves known parts without reporting complete delivery."""
+    monkeypatch.setattr(
+        "custom_components.textbelt_sms.async_get_clientsession", lambda _: _Session()
+    )
+    entry = _entry()
+    await async_setup_entry(hass, entry)
+    runtime = entry.runtime_data
+    started = asyncio.Event()
+
+    async def post(_phone: str, _message: str, _webhook: str | None = None) -> dict:
+        if runtime.client.async_send_sms.await_count == 1:
+            return {"success": True, "textId": "one"}
+        started.set()
+        await asyncio.Event().wait()
+        return {"success": True, "textId": "unreachable"}
+
+    runtime.client.async_send_sms = AsyncMock(side_effect=post)
+    task = asyncio.create_task(
+        hass.services.async_call(
+            DOMAIN,
+            SERVICE_SEND_SMS,
+            {"phone": "+1", "message": "a" * 400},
+            blocking=True,
+        )
+    )
+    await started.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert runtime.coordinator.data.text_ids == ("one",)
+    assert runtime.coordinator.data.status == MessageStatus.UNKNOWN
+    assert runtime.coordinator.data.submission_outcome == "unknown"
+    await async_unload_entry(hass, entry)
+
+
+async def test_service_preparation_error_is_visible_without_post(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Unsupported meaningful text replaces previous state with failed attempt."""
+    monkeypatch.setattr(
+        "custom_components.textbelt_sms.async_get_clientsession", lambda _: _Session()
+    )
+    entry = _entry()
+    await async_setup_entry(hass, entry)
+    post = AsyncMock()
+    entry.runtime_data.client.async_send_sms = post
+    with pytest.raises(HomeAssistantError, match="Unsupported character"):
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_SEND_SMS,
+            {"phone": "+1", "message": "\u6f22"},
+            blocking=True,
+        )
+    assert entry.runtime_data.coordinator.data.status == MessageStatus.FAILED
+    post.assert_not_awaited()
     await async_unload_entry(hass, entry)
