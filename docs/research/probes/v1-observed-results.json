@@ -36,7 +36,7 @@
   "original177fixture_unchanged": true,
   "stop_reason": "insufficient_seven_credit_reserve",
   "no_more_posts": true,
-  "receipt_evidence": "User reports22texts; G1copy has11substitutions, G2-G5coreexact, G6/G7controlsambiguous, boundaryexactfidelityunknown; MMSdifferenttimeinvestigationstopped.",
+  "receipt_evidence": "User reports22texts. G1converted11characters; G2-G5exactcore; G6/G7controlsambiguous. Five boundary copies exact, ten unknown; wire segmentation unestablished. Different-time MMS investigation stopped.",
   "records": [
     {
       "id": "valid-short",
@@ -1371,9 +1371,9 @@
         }
       ],
       "final_status": "DELIVERED",
-      "fidelity_verdict": "unknown",
-      "received_text": null,
-      "receipt_evidence": "User screenshot partial visual evidence; individual exact attribution unresolved."
+      "fidelity_verdict": "exact_copied_text",
+      "received_text": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "receipt_evidence": "User copied received boundary text on2026-10-01; exact comparison verified. Wire segmentation not established."
     },
     {
       "id": "boundary-ascii-161",
@@ -1572,9 +1572,9 @@
         }
       ],
       "final_status": "DELIVERED",
-      "fidelity_verdict": "unknown",
-      "received_text": null,
-      "receipt_evidence": "User screenshot partial visual evidence; individual exact attribution unresolved."
+      "fidelity_verdict": "exact_copied_text",
+      "received_text": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "receipt_evidence": "User copied received boundary text on2026-10-01; exact comparison verified. Wire segmentation not established."
     },
     {
       "id": "boundary-extension-80",
@@ -1692,9 +1692,9 @@
         }
       ],
       "final_status": "DELIVERED",
-      "fidelity_verdict": "unknown",
-      "received_text": null,
-      "receipt_evidence": "User screenshot partial visual evidence; individual exact attribution unresolved."
+      "fidelity_verdict": "exact_copied_text",
+      "received_text": "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+      "receipt_evidence": "User copied received boundary text on2026-10-01; exact comparison verified. Wire segmentation not established."
     },
     {
       "id": "boundary-extension-81",
@@ -1813,9 +1813,9 @@
         }
       ],
       "final_status": "DELIVERED",
-      "fidelity_verdict": "unknown",
-      "received_text": null,
-      "receipt_evidence": "User screenshot partial visual evidence; individual exact attribution unresolved."
+      "fidelity_verdict": "exact_copied_text",
+      "received_text": "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+      "receipt_evidence": "User copied received boundary text on2026-10-01; exact comparison verified. Wire segmentation not established."
     },
     {
       "id": "boundary-bmp-70",
@@ -3209,9 +3209,9 @@
         }
       ],
       "final_status": "DELIVERED",
-      "fidelity_verdict": "unknown",
-      "received_text": null,
-      "receipt_evidence": "User screenshot partial visual evidence; individual exact attribution unresolved."
+      "fidelity_verdict": "exact_copied_text",
+      "received_text": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "receipt_evidence": "User copied received boundary text on2026-10-01; exact comparison verified. Wire segmentation not established."
     }
   ],
   "user_reported_text_count": 22,
@@ -3302,5 +3302,7 @@
     "U+000C"
   ],
   "production_policy_frozen": false,
-  "mms_investigation": "User states different timestamp; investigation stopped."
+  "mms_investigation": "User states different timestamp; investigation stopped.",
+  "exact_boundary_copy_count": 5,
+  "unknown_boundary_copy_count": 10
 }

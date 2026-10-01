@@ -6,10 +6,10 @@ resolved three earlier SENT statuses to DELIVERED; no resend occurred.
 
 | Corpus ID | Encoding measurement | Credits | API | Final provider status | Fidelity |
 | --- | --- | --- | --- | --- | --- |
-| boundary-ascii-160 | 160 septets | 1 | Accepted | DELIVERED | Unknown |
-| boundary-ascii-161 | 161 septets | 2 | Accepted | DELIVERED | Unknown |
-| boundary-extension-80 | 160 septets | 1 | Accepted | DELIVERED | Unknown |
-| boundary-extension-81 | 162 septets | 2 | Accepted | DELIVERED | Unknown |
+| boundary-ascii-160 | 160 septets | 1 | Accepted | DELIVERED | Exact copied text |
+| boundary-ascii-161 | 161 septets | 2 | Accepted | DELIVERED | Exact copied text |
+| boundary-extension-80 | 160 septets | 1 | Accepted | DELIVERED | Exact copied text |
+| boundary-extension-81 | 162 septets | 2 | Accepted | DELIVERED | Exact copied text |
 | boundary-bmp-70 | 70 UTF-16 units | 1 | Accepted | DELIVERED | Unknown |
 | boundary-bmp-71 | 71 UTF-16 units | 2 | Accepted | DELIVERED | Unknown |
 | boundary-emoji-35 | 70 UTF-16 units | 1 | Accepted | DELIVERED | Unknown |
@@ -20,7 +20,7 @@ resolved three earlier SENT statuses to DELIVERED; no resend occurred.
 | boundary-extension-79 | 158 septets | 1 | Accepted | DELIVERED | Unknown |
 | boundary-bmp-69 | 69 UTF-16 units | 1 | Accepted | DELIVERED | Unknown |
 | boundary-emoji-34 | 68 UTF-16 units | 1 | Accepted | DELIVERED | Unknown |
-| boundary-ascii-306 | 306 septets | 2 | Accepted | DELIVERED | Unknown |
+| boundary-ascii-306 | 306 septets | 2 | Accepted | DELIVERED | Exact copied text |
 
 Boundary debit 21 credits 342 → 321. Including seven grouped probes, total 28 credits
 349 → 321, at most $1.68 at the supplied $3/50-credit price ceiling. Five credits
@@ -39,14 +39,13 @@ maximum, universal credit algorithm, full Unicode support or handset segmentatio
 The accepted 306-ASCII request is an observed lower bound, not a known maximum.
 
 All 22 paid POSTs were accepted and ultimately provider-reported DELIVERED. User
-reports 22 received texts. Exact boundary text copies/counts/segmentation remain
-unknown; the narrow screenshot supplies partial visual receipt evidence only.
+reports 22 received texts. Copied A160, A161, caret80, caret81 and A306 payloads exactly match sent text. The other ten executed boundary copies remain unknown; wire segmentation is not established by these copies. The screenshot provides additional partial visual evidence.
 Grouped G1–G5 now have copied evidence: G1 has eleven substitutions; G2–G5 exact
 core strings. CR/form-feed copies remain ambiguous. See
 [grouped results](stage0-carrier-results.md) and the inactive
 [124-character proposal](probes/v1-character-policy-proposal.json).
 
-Next input is copied boundary text and handset segmentation details. There are
+Remaining receipt input is the other ten boundary copies and handset segmentation details. There are
 no further sends or new budget requests. The user reports the extra undownloadable
 MMS at a different time; investigation stopped. No inbox access is assumed.
 Provider maximum/unit, reply lifetime/inbound IDs, callback retries/acknowledgments,

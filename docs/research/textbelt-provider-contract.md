@@ -1,6 +1,6 @@
 # Textbelt provider contract: Stage 0 review checkpoint
 
-The authorized API trial is complete within its budget. Overall Stage 0 review and boundary receipt fidelity remain pending. Six test-mode
+The authorized API trial is complete within its budget. Overall Stage 0 review remains pending; five boundary copies are exact and ten remain unknown. Six test-mode
 controls, seven grouped character probes and 15 boundary probes have separate
 [sanitized observed results](probes/v1-observed-results.json). All 22 paid POSTs
 were accepted and ultimately provider-reported DELIVERED. User reports 22 texts.
@@ -12,8 +12,7 @@ remain unused after the seven-credit reserve stop. No more POSTs are planned.
 User copied G1–G5. G1 converted ten Greek characters and ¤ to question marks;
 its other positions match. G2–G5 copied cores match, including actual LF. G6/G7
 control copies are ambiguous; CR/form feed exact fidelity is unproven.
-[grouped results](stage0-carrier-results.md) record this evidence. Boundary exact
-receipt/count/segmentation remains unknown; see [boundary results](stage0-boundary-results.md).
+[grouped results](stage0-carrier-results.md) record this evidence. Five boundary payload copies match exactly (A160, A161, caret80, caret81, A306); ten remain unknown and wire segmentation is unestablished; see [boundary results](stage0-boundary-results.md).
 
 The [character proposal](probes/v1-character-policy-proposal.json) explicitly
 lists 124 characters with GSM weights and per-character group/position evidence,
@@ -58,7 +57,6 @@ Do not overwrite historical inputs or infer production acceptance from stubs.
 
 ## Remaining checkpoint input
 
-Root review of the explicit 124-character proposal and copied boundary receipts/
-segmentation are pending. Provider hard maximum/unit, reply lifetime/unique inbound
+Root review of the explicit 124-character proposal is pending. Five copied boundary payloads match exactly; ten copies and handset segmentation remain unresolved. Provider hard maximum/unit, reply lifetime/unique inbound
 IDs, callback acknowledgment/retries, HELP and idempotency remain unknown. No
 further sends or budget request. The separate-time MMS investigation is stopped.

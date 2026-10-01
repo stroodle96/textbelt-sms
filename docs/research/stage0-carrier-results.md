@@ -33,7 +33,7 @@ not universal provider/carrier support or approved product policy.
 Fifteen later boundary POSTs cost 21 more credits. Total 28 credits 349 → 321,
 maximum $1.68 at supplied $3/50 ceiling; five-credit buffer remains unused.
 All 22 paid requests ultimately reported DELIVERED. User reports 22 received texts;
-exact boundary copies/segmentation remain pending. The extra undownloadable MMS
+five boundary copies now match exactly, ten remain unknown, and wire segmentation remains unresolved. The extra undownloadable MMS
 was reported at a different time; investigation stopped. No further sends.
 
 See [boundary results](stage0-boundary-results.md) and
