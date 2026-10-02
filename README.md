@@ -182,3 +182,36 @@ is sent. Extension characters count as two septets. These are integration
 budgets; Textbelt's true request maximum remains unknown. Textbelt may append
 sender or STOP text and charge additional credits. The observed character
 trial covered one account and US/T-Mobile, not all carriers.
+
+### Standard notification targets
+
+Open **Settings → Devices & services → Textbelt SMS → Configure** and enter one
+notification recipient per line. Use explicit international numbers beginning
+with `+` and a country code; spaces, hyphens, dots, and parentheses are normalized.
+Numbers must contain 2–15 ASCII digits after `+`; validation checks syntax, not
+whether the number is assigned or deliverable. Duplicate numbers create one target.
+Leave the list empty to keep the existing outbound action only.
+
+Each recipient creates a `notify` entity with a masked last-four-digit name and
+a hashed entity ID. Rename it in Home Assistant's entity settings if desired.
+Removing a recipient leaves its registry entry unavailable; re-adding the same
+number restores its identity and custom name. Recipient order does not change identity.
+Recipients do not authorize incoming Assist requests. Alerts work without an
+external callback or Assist configuration.
+
+Select your actual entity in the action editor:
+
+```yaml
+action: notify.send_message
+target:
+  entity_id: notify.my_phone
+data:
+  title: Water leak
+  message: Water was detected in the utility room.
+```
+
+Title and message use the shared preparation and multipart sender. Provider
+rejection, partial acceptance, or uncertain submission raises an action error
+and does not advance the successful-notification timestamp. Acceptance is not
+carrier delivery confirmation. Quota refresh runs independently after attempts.
+The `textbelt_sms.send_sms` action remains available for dynamic destinations.

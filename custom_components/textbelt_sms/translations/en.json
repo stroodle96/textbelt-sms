@@ -1,20 +1,33 @@
 {
-    "config": {
-        "step": {
-            "user": {
-                "description": "Enter your Textbelt API key. If you need help, visit: {docs_url}.",
-                "data": {
-                    "api_key": "API Key"
-                }
-            }
-        },
-        "error": {
-            "invalid_api_key": "Invalid or missing API key.",
-            "connection": "Unable to connect to Textbelt API.",
-            "unknown": "Unknown error occurred."
-        },
-        "abort": {
-            "already_configured": "Textbelt SMS is already configured."
+  "config": {
+    "step": {
+      "user": {
+        "description": "Enter your Textbelt API key. If you need help, visit: {docs_url}.",
+        "data": {
+          "api_key": "API Key"
         }
+      }
+    },
+    "error": {
+      "invalid_api_key": "Invalid or missing API key.",
+      "connection": "Unable to connect to Textbelt API.",
+      "unknown": "Unknown error occurred."
+    },
+    "abort": {
+      "already_configured": "Textbelt SMS is already configured."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "notification_recipients": "Notification recipients"
+        },
+        "description": "Enter one international phone number per line, including + and country code. Leave empty for no notification targets. Recipients do not authorize Assist."
+      }
+    },
+    "error": {
+      "invalid_recipient": "Use one explicit international number per line (+ and up to 15 ASCII digits). Extensions are not supported."
+    }
+  }
 }

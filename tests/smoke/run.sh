@@ -53,3 +53,7 @@ if [[ "${LIVE_SMOKE:-0}" != 1 ]]; then
   python3 "$smoke_dir/exercise_api.py" --token "$token" --refresh-only
 fi
 python3 "$smoke_dir/exercise_api.py" --token "$token" --webhook-only
+
+if [[ "${LIVE_SMOKE:-0}" != 1 ]]; then
+  python3 "$smoke_dir/exercise_api.py" --token "$token" --notify-only
+fi

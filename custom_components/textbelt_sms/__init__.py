@@ -76,7 +76,7 @@ async def async_setup(hass: HomeAssistant, _: ConfigType) -> bool:
     return True
 
 
-PLATFORMS = [Platform.SENSOR]
+PLATFORMS = [Platform.SENSOR, Platform.NOTIFY]
 
 
 @dataclass
@@ -89,6 +89,33 @@ class TextbeltRuntimeData:
     sender: TextbeltSender
     send_lock: asyncio.Lock
     active: bool = True
+
+    async def async_send(
+        self,
+        hass: HomeAssistant,
+        phone: str,
+        message: str,
+        *,
+        title: str | None = None,
+        webhook_url: str | None = None,
+    ) -> None:
+        """Share visible outcomes and independent quota refresh across actions."""
+        if not self.active:
+            _raise_action_error(SEND_ERROR)
+        try:
+            result = await self.sender.async_send(
+                phone, message, title=title, webhook_url=webhook_url
+            )
+        except MessagePreparationError as err:
+            _raise_action_error(str(err))
+        finally:
+            if self.active:
+                hass.async_create_task(self.quota_coordinator.async_request_refresh())
+        if result.outcome != "accepted":
+            _raise_action_error(
+                f"Textbelt SMS {result.outcome}: "
+                f"{result.accepted_parts}/{result.total_parts} parts accepted"
+            )
 
 
 async def async_setup_entry(  # noqa: PLR0915
@@ -160,22 +187,7 @@ async def async_setup_entry(  # noqa: PLR0915
             if not phone or not message:
                 _raise_action_error(MISSING_FIELDS_ERROR)
 
-            if not runtime.active:
-                _raise_action_error(SEND_ERROR)
-            try:
-                result = await sender.async_send(
-                    phone, message, webhook_url=webhook_url
-                )
-            except MessagePreparationError as err:
-                _raise_action_error(str(err))
-            finally:
-                if runtime.active:
-                    hass.async_create_task(quota_coordinator.async_request_refresh())
-            if result.outcome != "accepted":
-                _raise_action_error(
-                    f"Textbelt SMS {result.outcome}: "
-                    f"{result.accepted_parts}/{result.total_parts} parts accepted"
-                )
+            await runtime.async_send(hass, phone, message, webhook_url=webhook_url)
 
         # Register the send_sms service.
         LOGGER.debug("Registering send_sms service")
