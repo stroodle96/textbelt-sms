@@ -1,0 +1,1 @@
+{"domain":"textbelt_smoke_agent","name":"Deterministic smoke agent","version":"1.0.0","config_flow":true,"dependencies":["conversation","assist_pipeline"],"codeowners":[]}

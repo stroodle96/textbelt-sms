@@ -9,7 +9,7 @@ services:
       - ./textbelt_stub.py:/app/textbelt_stub.py:ro
       - smoke-data:/data
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
       interval: 2s
@@ -22,12 +22,15 @@ services:
       textbelt:
         condition: service_healthy
     environment:
+      LIVE_SMOKE: ${LIVE_SMOKE:-0}
       TEXTBELT_SMS_API_BASE_URL: ${TEXTBELT_SMS_API_BASE_URL:-http://textbelt:8080}
     ports:
-      - "8123:8123"
+      - "127.0.0.1:8123:8123"
     volumes:
       - ${HA_CONFIG_DIR:-./ha-config}:/config
       - ../../custom_components/textbelt_sms:/config/custom_components/textbelt_sms:ro
+      - ./custom_components/textbelt_smoke_agent:/config/custom_components/textbelt_smoke_agent:ro
+      - ./:/smoke:ro
 
 volumes:
   smoke-data:

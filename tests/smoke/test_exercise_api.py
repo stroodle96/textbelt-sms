@@ -3,11 +3,17 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
+import re
 import sys
 from io import BytesIO
+from pathlib import Path
 
 import pytest
 
+from custom_components.textbelt_sms.options import callback_base_url
 from tests.smoke import exercise_api
 
 
@@ -228,3 +234,80 @@ def test_native_notify_mode_is_disabled_for_live_smoke(
 
     monkeypatch.setattr(exercise_api, "exercise_notify", unexpected_notify)
     exercise_api.main()
+
+
+def test_signed_fixture_uses_raw_timestamp_and_bytes() -> None:
+    """Match the provider contract with independently computed HMAC."""
+    raw = b'{"text":"a b"}'
+    headers = exercise_api.signed_headers(raw, "smoke-test-key", "123")
+    assert (
+        headers["X-textbelt-signature"]
+        == hmac.new(b"smoke-test-key", b"123" + raw, hashlib.sha256).hexdigest()
+    )
+
+
+def test_generated_callback_discovery_rejects_fixed_or_foreign_hosts() -> None:
+    """Discover only the configured generated path."""
+    assert (
+        exercise_api.callback_path("https://ha.example.com/api/webhook/abc")
+        == "/api/webhook/abc"
+    )
+    for url in (
+        "https://evil.test/api/webhook/abc",
+        "https://ha.example.com/api/webhook/textbelt_sms_reply",
+    ):
+        with pytest.raises(exercise_api.SmokeError):
+            exercise_api.callback_path(url)
+
+
+def test_offline_credentials_override_inherited_provider_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An offline run cannot inherit a provider credential."""
+    monkeypatch.setenv("LIVE_SMOKE", "0")
+    assert exercise_api.smoke_key("real-provider-key") == "smoke-test-key"
+
+
+def test_offline_placeholder_matches_product_callback_validation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate the actual runner placeholder without any external HTTP request."""
+
+    def unexpected_request(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("Placeholder validation must not contact a provider or public host")
+
+    monkeypatch.setenv("LIVE_SMOKE", "0")
+    monkeypatch.setattr(exercise_api.request, "urlopen", unexpected_request)
+    source = Path(exercise_api.__file__).with_name("run.sh").read_text()
+    match = re.search(r"external_url: (\S+)", source)
+    assert match is not None
+    base = match.group(1)
+    assert callback_base_url(base) == base
+    assert exercise_api.callback_path(base + "/api/webhook/generated-id") == (
+        "/api/webhook/generated-id"
+    )
+    assert exercise_api.smoke_key("provider-key") == "smoke-test-key"
+
+
+def test_expected_ha_plaintext_error_does_not_require_json() -> None:
+    """HA's deliberate partial-send HTTP500 response is valid plaintext."""
+    raw = b"500 Internal Server Error\n\nServer got itself in trouble"
+    assert exercise_api.decode_expected_response(raw, status=500, expected=500) == {}
+
+
+@pytest.mark.parametrize(("status", "expected"), [(400, 500), (200, 500), (500, 200)])
+def test_expected_error_decoder_rejects_wrong_status(
+    status: int, expected: int
+) -> None:
+    """A status mismatch cannot be excused by expected-error body handling."""
+    with pytest.raises(exercise_api.SmokeError, match="Unexpected HTTP status"):
+        exercise_api.decode_expected_response(b"{}", status=status, expected=expected)
+
+
+def test_success_response_decoder_keeps_json_validation_strict() -> None:
+    """Invalid successful JSON remains a harness failure."""
+    with pytest.raises(json.JSONDecodeError):
+        exercise_api.decode_expected_response(b"not-json", status=200, expected=200)
+    assert exercise_api.decode_expected_response(b'{"ok":true}', status=200) == {
+        "ok": True
+    }

@@ -215,3 +215,95 @@ rejection, partial acceptance, or uncertain submission raises an action error
 and does not advance the successful-notification timestamp. Acceptance is not
 carrier delivery confirmation. Quota refresh runs independently after attempts.
 The `textbelt_sms.send_sms` action remains available for dynamic destinations.
+
+### Native Assist over SMS
+
+Native Assist is opt-in. In **Settings → Devices & services → Textbelt SMS →
+Configure**, enable Assist and enter authorized senders using explicit
+international `+` numbers, one per line. Notification recipients are independent
+and do not grant permission to control Home Assistant. Select an Assist pipeline
+or leave it on **preferred**; preferred is resolved for each incoming turn, so
+changing Home Assistant's preferred pipeline takes effect without editing this
+integration. Configure the conversation inactivity timeout (default 1800 seconds).
+
+Configure Home Assistant's external URL as public HTTPS, and make its generated
+`/api/webhook/<random-entry-ID>` callback reachable by Textbelt. The ID persists
+across reloads and restarts. URL validation does not prove external reachability.
+Use a paid, reply-capable Textbelt account; Textbelt documents replies for US
+numbers and non-free keys. The public `textbelt` key and keys ending in `_test`
+cannot enable Assist or authenticate replies. Number syntax validation does not
+establish country, carrier, account eligibility or satellite delivery.
+
+Disable old SMS-to-Assist routing automations/scripts before enabling native
+Assist, including consumers of `textbelt_sms_reply` that invoke home actions.
+The compatibility event still exists; leaving a second router enabled can cause
+a second action. Native routing needs no user automation or script.
+
+Start a thread from Home Assistant:
+
+```yaml
+action: textbelt_sms.start_conversation
+data:
+  phone: "+15551234567"  # replace with an authorized, real international number
+```
+
+The greeting creates an accepted outgoing ID to which replies can correlate.
+Reply to that thread to use the selected pipeline. Context is isolated by sender
+and resolved pipeline. `/new` resets that sender's conversations and sends a
+confirmation without running Assist. Exact trimmed `STOP`, `START` and `HELP`
+are excluded from native execution and receive no automatic integration reply;
+provider opt-out handling remains separate. A pipeline change, timeout, reload,
+disable or restart clears volatile conversation context. Start a new thread if
+an old reply no longer correlates.
+
+Replies require Textbelt's timestamp/HMAC signature and correlation with a known
+accepted outgoing ID and its recipient. Native execution additionally checks the
+current authorized-sender list. Local metadata expires after seven days; an
+identical admitted body is suppressed for two minutes even with a fresh
+signature. These are integration policies, not documented provider reply/retry
+windows or an exactly-once guarantee. Unauthorized and malformed callbacks are
+rejected without running Assist. Admitted work lost during shutdown is not replayed.
+
+Existing installations migrate with native Assist disabled, preserving the API
+key, recipient options and sensor identities. The signed fixed
+`/api/webhook/textbelt_sms_reply` endpoint remains **events only**, including
+outstanding older replies; it never executes native Assist. The dynamic
+`textbelt_sms.send_sms` service still accepts documented legacy phone strings.
+If such a destination cannot be normalized as explicit international format, its
+send uses the fixed signed events-only callback and skips native correlation
+metadata. Canonical dynamic, notify and native sends use the generated endpoint.
+Use explicit international numbers and `start_conversation` for native threads.
+
+### Delivery, cost and privacy boundaries
+
+Native greetings and replies share the reviewed 124-character GSM repertoire,
+160-septet prepared-part limit (including multipart labels) and five-prepared-part
+cap with dynamic sends and notification entities. Long native speech may be
+compacted/truncated to the bounded budget; unsupported or empty speech receives a
+safe explanatory response. The character observations cover one account and
+US/T-Mobile only; they do not establish every-carrier or every-character delivery
+fidelity. Provider request maxima, appended content and carrier segment charging
+remain separate. Five prepared parts is a submission cap, **not a guaranteed
+five-credit maximum**. A greeting, `/new` confirmation and each reply can consume
+credits. Check the quota sensor and Textbelt's account balance.
+
+Partial acceptance and an accepted-then-disconnected request are visible failures.
+Known accepted part IDs remain available for delivery tracking; uncertain parts
+cannot safely be claimed accepted. Sending stops at the first failure and does
+not retry automatically. A failed response does not rerun the Assist pipeline.
+After an Assist timeout/error, check Home Assistant before resending: an action
+may already have completed. Provider acceptance does not prove delivery. Quota
+and status lookup failures do not cause additional SMS sends.
+
+The integration's reply-state Store retains metadata only: outgoing IDs,
+normalized recipients, timestamps and replay digests. Its conversation mappings,
+transcripts and queued turns are not persisted by this implementation. The
+existing last-message sensor still exposes outgoing message attributes, and Home
+Assistant Recorder/history may retain that outgoing text. Authenticated reply
+events expose inbound text to configured listeners, and selected conversation
+agents may have their own storage policies. Do not interpret the metadata-only
+Store as a blanket claim that Home Assistant retains no SMS content.
+
+Local fixture tests cannot establish real provider/carrier delivery, satellite
+behavior, callback retry/acknowledgment rules, inbound-message IDs or reply windows.
+See [local validation evidence](docs/research/stage4-local-validation.md).

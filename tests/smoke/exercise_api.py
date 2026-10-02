@@ -4,11 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import hmac
 import json
 import os
 import sys
 import time
 from datetime import datetime
+from http import HTTPStatus
 from urllib import error, parse, request
 
 
@@ -42,6 +45,72 @@ def call(
     with request.urlopen(req, timeout=10) as response:  # noqa: S310
         content = response.read()
         return json.loads(content) if content else {}
+
+
+def decode_expected_response(
+    raw: bytes, *, status: int, expected: int = 200
+) -> dict | list:
+    """Require exact status and permit plaintext for expected errors."""
+    if status != expected:
+        message = f"Unexpected HTTP status: received {status}, expected {expected}"
+        raise SmokeError(message)
+    if expected >= HTTPStatus.BAD_REQUEST:
+        return {}
+    return json.loads(raw) if raw else {}
+
+
+def smoke_key(candidate: str) -> str:
+    """Force synthetic credentials for offline runs."""
+    return candidate if os.environ.get("LIVE_SMOKE") == "1" else "smoke-test-key"
+
+
+def signed_headers(raw: bytes, key: str, timestamp: str | None = None) -> dict:
+    """Independently sign the exact fixture bytes."""
+    timestamp = timestamp or str(int(time.time()))
+    return {
+        "Content-Type": "application/json",
+        "X-textbelt-timestamp": timestamp,
+        "X-textbelt-signature": hmac.new(
+            key.encode(), timestamp.encode("ascii") + raw, hashlib.sha256
+        ).hexdigest(),
+    }
+
+
+def callback_path(url: str) -> str:
+    """Validate captured configuration; never request the synthetic public host."""
+    parsed = parse.urlsplit(url)
+    if (
+        parsed.scheme != "https"
+        or parsed.netloc != "ha.example.com"
+        or not parsed.path.startswith("/api/webhook/")
+        or parsed.path.endswith("/textbelt_sms_reply")
+        or parsed.query
+    ):
+        message = "Unexpected generated callback configuration"
+        raise SmokeError(message)
+    return parsed.path
+
+
+def post_reply(
+    base: str,
+    path: str,
+    raw: bytes,
+    *,
+    timestamp: str | None = None,
+    signed: bool = True,
+) -> int:
+    """POST fixtures only to local HA, returning deliberate safe statuses."""
+    headers = (
+        signed_headers(raw, "smoke-test-key", timestamp)
+        if signed
+        else {"Content-Type": "application/json"}
+    )
+    req = request.Request(base + path, data=raw, headers=headers, method="POST")  # noqa: S310
+    try:
+        with request.urlopen(req, timeout=10) as response:  # noqa: S310
+            return response.status
+    except error.HTTPError as exc:
+        return exc.code
 
 
 def stub_call(stub: str, path: str) -> dict:
@@ -285,7 +354,10 @@ def main() -> None:  # noqa: PLR0915
     parser.add_argument("--verify-runtime", action="store_true")
     parser.add_argument("--refresh-only", action="store_true")
     args = parser.parse_args()
+    args.api_key = smoke_key(args.api_key)
     use_stub = os.environ.get("LIVE_SMOKE") != "1"
+    if use_stub:
+        args.stub = "http://127.0.0.1:8080"
     if args.failure and not args.token:
         parser.error("--failure requires --token from the initial smoke run")
     wait_for_ha(args.base)
@@ -295,12 +367,12 @@ def main() -> None:  # noqa: PLR0915
             exercise_notify(args.base, token, args.stub, args.api_key)
         return
     if args.webhook_only:
-        call(
-            f"{args.base}/api/webhook/textbelt_sms_reply",
-            "",
-            "POST",
-            {"text": "reply"},
-        )
+        raw = json.dumps(
+            {"textId": "legacy", "fromNumber": "+15551234567", "text": "reply"}
+        ).encode()
+        if post_reply(args.base, "/api/webhook/textbelt_sms_reply", raw) != 200:  # noqa: PLR2004
+            message = "Signed legacy webhook failed"
+            raise SmokeError(message)
         return
     if args.refresh_only:
         call(
@@ -330,9 +402,8 @@ def main() -> None:  # noqa: PLR0915
             "message": "smoke",
             "key": args.api_key,
         }
-        expected_request["replyWebhookUrl"] = (
-            "http://homeassistant:8123/api/webhook/textbelt_sms_reply"
-        )
+        expected_request["replyWebhookUrl"] = requests[0].get("replyWebhookUrl")
+        callback_path(expected_request["replyWebhookUrl"])
         if len(requests) != 1 or requests[0] != expected_request:
             raise SmokeError(f"Unexpected Textbelt stub request: {requests}")
         wait_for_state(args.base, token, "97", QUOTA_ENTITY)
