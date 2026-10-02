@@ -3,3 +3,11 @@
 homeassistant==2026.8.2
 pytest-homeassistant-custom-component==0.13.356
 pytest-cov==7.1.0
+
+# Imports and real INTENT pipeline tests (HA 2026.8.2 manifest versions).
+hassil==3.11.0
+home-assistant-intents==2026.7.30
+mutagen==1.48.1
+ha-ffmpeg==3.2.2
+pymicro-vad==1.0.1
+pyspeex-noise==1.0.2
