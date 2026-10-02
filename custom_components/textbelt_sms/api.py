@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import os
 from http import HTTPStatus
-from numbers import Number
 from typing import Any
 from urllib.parse import quote
 
@@ -15,6 +14,7 @@ from .const import API_BASE_URL_ENV, DEFAULT_API_BASE_URL
 
 AUTHENTICATION_ERROR = "Invalid API key or unauthorized."
 INVALID_RESPONSE_ERROR = "Textbelt API returned an invalid response."
+MAX_TEXT_ID_CHARS = 128
 INVALID_TEXT_ID_ERROR = "Textbelt text ID must be numeric or a non-empty string"
 
 
@@ -40,11 +40,16 @@ class TextbeltTextIdError(TextbeltApiClientError, ValueError):
 
 def normalize_text_id(text_id: object) -> str:
     """Validate and normalize a Textbelt text ID for URL and state use."""
-    if isinstance(text_id, bool) or not isinstance(text_id, (str, Number)):
+    if isinstance(text_id, bool) or not isinstance(text_id, (str, int)):
         raise TextbeltTextIdError(INVALID_TEXT_ID_ERROR)
     if isinstance(text_id, str) and not text_id.strip():
         raise TextbeltTextIdError(INVALID_TEXT_ID_ERROR)
-    return str(text_id)
+    normalized = str(text_id)
+    if (isinstance(text_id, int) and text_id <= 0) or len(
+        normalized
+    ) > MAX_TEXT_ID_CHARS:
+        raise TextbeltTextIdError(INVALID_TEXT_ID_ERROR)
+    return normalized
 
 
 class TextbeltApiClient:

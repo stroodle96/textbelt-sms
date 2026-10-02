@@ -13,6 +13,7 @@ from custom_components.textbelt_sms.api import (
     TextbeltApiClientCommunicationError,
     TextbeltApiClientError,
     TextbeltApiClientUnknownOutcomeError,
+    normalize_text_id,
 )
 
 
@@ -462,3 +463,18 @@ async def test_status_error_sanitized() -> None:
         await TextbeltApiClient("secret", session).async_get_status("abc")
     assert "secret" not in str(caught.value)
     assert caught.value.__suppress_context__
+
+
+@pytest.mark.parametrize("text_id", [0, -1, 1.5, "x" * 129])
+async def test_get_status_rejects_noncanonical_ids(text_id: object) -> None:
+    """Reject IDs that cannot be safely correlated with verified replies."""
+    with pytest.raises(ValueError, match="numeric"):
+        await TextbeltApiClient(
+            "secret", _get_session(_response(200, {}))
+        ).async_get_status(text_id)
+
+
+@pytest.mark.parametrize("text_id", [" 0042 ", "a b"])
+def test_text_id_strings_preserve_identity(text_id: str) -> None:
+    """Never rewrite string IDs or invent a provider ID grammar."""
+    assert normalize_text_id(text_id) == text_id
