@@ -17,7 +17,7 @@ services:
       retries: 30
 
   homeassistant:
-    image: ghcr.io/home-assistant/home-assistant:2026.8.2
+    image: ${HA_SMOKE_IMAGE:-ghcr.io/home-assistant/home-assistant:2026.8.2}
     depends_on:
       textbelt:
         condition: service_healthy
