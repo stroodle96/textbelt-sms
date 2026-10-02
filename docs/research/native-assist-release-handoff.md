@@ -1,6 +1,6 @@
 # Native SMS Assist: draft release and migration handoff
 
-Prepared October 2, 2026 against local candidate `94bdb9575ccfd836928b12a5b85622c753fd5f94` on `codex/textbelt-assist-stage0`. This is reviewable release copy, not a published release or deployment result. The manifest still reads `0.2.0`; a future release version must be chosen separately. Do not reuse an existing tag for this candidate.
+Prepared October 2, 2026 for planned local candidate `0.3.0` on `codex/textbelt-assist-stage0`, from completion baseline `a0a5e116c8e12ce6ec7e426b6ec54ddc02164bdd`. The manifest now reads `0.3.0`; the intended first publication channel is prerelease. Fresh read-only GitHub checks found published `v0.2.0` and `v0.1.0`, both prereleases, and no `v0.3.0` tag, including orphan tags. This is local metadata and reviewable release copy: `0.3.0` is not published, available in HACS or deployed to user Home Assistant. Never move or reuse an existing tag; recheck availability immediately before any separately authorized publication.
 
 ## Draft release notes
 
@@ -44,4 +44,18 @@ The [carrier acceptance packet](native-assist-carrier-trial.md) is prepared loca
 
 Follow [CONTRIBUTING's publishing procedure](../../CONTRIBUTING.md#publishing-releases) and the existing [Release workflow](../../.github/workflows/release.yml). It is `workflow_dispatch` from `main`, requiring an exact manifest version and explicit `prerelease` or `stable` channel; merge alone does not publish.
 
-Before dispatch: obtain the applicable integration/push/merge/publication authorization, choose an unused release version, complete candidate review and required checks on the integrated tree, and inspect existing tags/releases. Resolve any tag without a release instead of moving/reusing it. Preserve material acceptance limits in release copy. After an authorized prerelease, verify successful Verify release/Publish release jobs, non-draft prerelease, immutable tag SHA and tagged manifest; verify actual HACS discovery/download/restart. Stable promotion retests the same immutable tagged code; verify unchanged release ID/SHA, latest stable release and HACS access with prereleases disabled. These publication/install checks have not been executed here.
+Before dispatch: complete the live carrier acceptance gate and obtain the applicable integration/push/merge/publication authorization, confirm planned version `0.3.0` is still unused, complete candidate review and required checks on the integrated tree, and inspect existing tags/releases. Use the prerelease channel for initial publication; stable promotion is a later acceptance step. Resolve any tag without a release instead of moving/reusing it. Preserve material acceptance limits in release copy. After an authorized prerelease, verify successful Verify release/Publish release jobs, non-draft prerelease, immutable tag SHA and tagged manifest; verify actual HACS discovery/download/restart. Stable promotion retests the same immutable tagged code; verify unchanged release ID/SHA, latest stable release and HACS access with prereleases disabled. These publication/install checks have not been executed here.
+
+## Pinned installation ZIP preparation
+
+After independent review and the coordinator's local commit, record its full commit SHA as `candidateCommit`. Build an installation archive from that committed tree, never from mutable working files:
+
+```powershell
+$candidateCommit = '<reviewed full commit SHA>'
+$archive = Join-Path $env:TEMP "textbelt-sms-0.3.0-$candidateCommit.zip"
+git show "$($candidateCommit):custom_components/textbelt_sms/manifest.json"
+git archive --format=zip --output="$archive" "$candidateCommit" custom_components/textbelt_sms
+Get-FileHash -Algorithm SHA256 -LiteralPath $archive
+```
+
+Record the exact commit SHA, command exit status, archive path and SHA-256. Inspect the ZIP for only `custom_components/textbelt_sms/` contents, extract to a temporary directory and compare each extracted file's SHA-256 with the same path from the pinned committed tree; confirm extracted manifest `0.3.0`. The coordinator creates this artifact only after committing the reviewed snapshot. No archive was built in this metadata task. An archive and hash prove provenance, not installation, callback reachability or carrier acceptance. Any installation still needs explicit deployment authorization and a verified usable Home Assistant backup; GitHub/HACS publication remains a separate controlled workflow.
