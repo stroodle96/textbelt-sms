@@ -2,11 +2,16 @@
 """Tests for Home Assistant setup and service behavior."""
 
 import asyncio
+import hashlib
+import hmac
+import json
+import time
 from typing import Self
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import voluptuous as vol
+from aiohttp.test_utils import make_mocked_request
 from homeassistant.const import CONF_API_KEY
 from homeassistant.core import HomeAssistant, HomeAssistantError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -20,6 +25,7 @@ from custom_components.textbelt_sms import (
 )
 from custom_components.textbelt_sms.const import DOMAIN, EVENT_REPLY
 from custom_components.textbelt_sms.sensor import LastMessage, MessageStatus
+from tests.test_webhook import Body
 
 
 class _Response:
@@ -70,7 +76,7 @@ def _entry() -> MockConfigEntry:
     return MockConfigEntry(
         domain=DOMAIN,
         title="Textbelt SMS",
-        data={CONF_API_KEY: "test-key"},
+        data={CONF_API_KEY: "test-key", "webhook_id": "test-native-endpoint"},
         entry_id="test-entry",
     )
 
@@ -265,7 +271,8 @@ async def test_setup_rolls_back_when_platform_forwarding_fails(
 
     assert entry.runtime_data is None
     assert not hass.services.has_service(DOMAIN, SERVICE_SEND_SMS)
-    unregister.assert_called_once_with(hass, WEBHOOK_ID)
+    assert unregister.call_count == 2  # noqa: PLR2004 -- both owned endpoints.
+    unregister.assert_any_call(hass, WEBHOOK_ID)
 
 
 async def test_reload_does_not_setup_after_failed_unload(
@@ -319,7 +326,8 @@ async def test_unload_removes_service_webhook_and_client(
     assert await async_unload_entry(hass, entry)
     assert not hass.services.has_service(DOMAIN, SERVICE_SEND_SMS)
     assert entry.runtime_data is None
-    unregister.assert_called_once_with(hass, WEBHOOK_ID)
+    assert unregister.call_count == 2  # noqa: PLR2004 -- both owned endpoints.
+    unregister.assert_any_call(hass, WEBHOOK_ID)
 
 
 async def test_reload_replaces_service_and_client(
@@ -345,7 +353,7 @@ async def test_reply_webhook_fires_event_without_logging_payload(
     """Dispatch reply webhook payloads as Home Assistant events."""
     captured: dict[str, object] = {}
 
-    def register(*args: object) -> None:
+    def register(*args: object, **_kwargs: object) -> None:
         captured["handler"] = args[-1]
 
     monkeypatch.setattr(
@@ -356,15 +364,30 @@ async def test_reply_webhook_fires_event_without_logging_payload(
     )
     entry = _entry()
     await async_setup_entry(hass, entry)
-    request = MagicMock()
-    request.json = AsyncMock(return_value={"from": "+1", "text": "reply"})
+
+    data = {"textId": "historic", "fromNumber": "+15551234567", "text": "reply"}
+    raw = json.dumps(data).encode()
+    timestamp = str(int(time.time()))
+    signature = hmac.new(
+        b"test-key", timestamp.encode() + raw, hashlib.sha256
+    ).hexdigest()
+    request = make_mocked_request(
+        "POST",
+        "/",
+        headers={
+            "Content-Type": "application/json",
+            "X-textbelt-timestamp": timestamp,
+            "X-textbelt-signature": signature,
+        },
+        payload=Body(raw),
+    )
     events: list[dict] = []
     hass.bus.async_listen(EVENT_REPLY, lambda event: events.append(event.data))
 
     await captured["handler"](hass, WEBHOOK_ID, request)
     await hass.async_block_till_done()
 
-    assert events == [{"from": "+1", "text": "reply"}]
+    assert events == [data]
     await async_unload_entry(hass, entry)
 
 
@@ -435,10 +458,10 @@ async def test_unload_during_multipart_prevents_next_post_and_stale_publish(
     await started.wait()
     await async_unload_entry(hass, entry)
     release.set()
-    with pytest.raises(HomeAssistantError):
+    with pytest.raises(asyncio.CancelledError):
         await task
-    assert runtime.sender.last_result.text_ids == ("one",)
-    assert runtime.sender.last_result.outcome == "partial"
+    assert runtime.sender.last_result.text_ids == ()
+    assert runtime.sender.last_result.outcome == "unknown"
     assert runtime.coordinator.data is None
     runtime.client.async_send_sms.assert_awaited_once()
 

@@ -30,6 +30,7 @@ class AssistResult:
     conversation_id: str | None
     reply: str
     error_code: str | None
+    ha_session_id: str | None = None
 
 
 async def async_ensure_assist_pipeline(hass: HomeAssistant) -> bool:
@@ -150,11 +151,19 @@ async def async_run_assist(  # noqa: PLR0913 -- frozen provider-independent inte
     if cancelled is not None:
         raise cancelled
     if error_code:
-        return AssistResult(pipeline.id, conversation_id, "", error_code)
+        return AssistResult(
+            pipeline.id, conversation_id, "", error_code, session.conversation_id
+        )
     if output is None:
-        return AssistResult(pipeline.id, conversation_id, "", "empty_reply")
+        return AssistResult(
+            pipeline.id, conversation_id, "", "empty_reply", session.conversation_id
+        )
     conversation_id = output.get("conversation_id") or conversation_id
     reply = _completed_speech(output)
     return AssistResult(
-        pipeline.id, conversation_id, reply, None if reply else "empty_reply"
+        pipeline.id,
+        conversation_id,
+        reply,
+        None if reply else "empty_reply",
+        session.conversation_id,
     )

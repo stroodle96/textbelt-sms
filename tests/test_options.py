@@ -107,3 +107,29 @@ async def test_options_form_serializes_for_frontend(hass: HomeAssistant) -> None
     fields = convert(result["data_schema"], custom_serializer=custom_serializer)
     timeout = next(field for field in fields if field["name"] == "conversation_timeout")
     assert timeout["selector"]["number"]["mode"] == "box"
+
+
+async def test_error_redisplay_preserves_submitted_edits_and_raw_phone(
+    hass: HomeAssistant,
+) -> None:
+    """An invalid sender must not discard unrelated valid form edits."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_API_KEY: "secret"},
+        options={"conversation_timeout": 1800},
+    )
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            "authorized_senders": "bad input",
+            "conversation_timeout": 1234,
+            "pipeline_id": "preferred",
+        },
+    )
+    fields = convert(result["data_schema"], custom_serializer=custom_serializer)
+    sender = next(field for field in fields if field["name"] == "authorized_senders")
+    timeout = next(field for field in fields if field["name"] == "conversation_timeout")
+    assert sender["description"]["suggested_value"] == "bad input"
+    assert timeout["description"]["suggested_value"] == 1234  # noqa: PLR2004 -- submitted timeout regression.

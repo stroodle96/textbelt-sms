@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.components.webhook import async_generate_id
 from homeassistant.const import CONF_API_KEY
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
@@ -19,7 +20,7 @@ from homeassistant.helpers.selector import (
 )
 
 from .assist import async_ensure_assist_pipeline, async_resolve_pipeline
-from .const import DOMAIN
+from .const import CONF_WEBHOOK_ID, DOMAIN, reply_key_usable
 from .options import (
     CONF_ASSIST_ENABLED,
     CONF_AUTHORIZED_SENDERS,
@@ -37,7 +38,7 @@ from .recipients import CONF_NOTIFICATION_RECIPIENTS, normalize_recipients
 class TextbeltSMSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for Textbelt SMS."""
 
-    VERSION = 1
+    VERSION = 2
 
     @staticmethod
     @callback
@@ -63,7 +64,7 @@ class TextbeltSMSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not errors:
                 return self.async_create_entry(
                     title="Textbelt SMS",
-                    data={CONF_API_KEY: api_key},
+                    data={CONF_API_KEY: api_key, CONF_WEBHOOK_ID: async_generate_id()},
                 )
         return self.async_show_form(
             step_id="user",
@@ -77,7 +78,7 @@ class TextbeltSMSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
 
-class TextbeltOptionsFlow(config_entries.OptionsFlowWithReload):
+class TextbeltOptionsFlow(config_entries.OptionsFlow):
     """Outbound destinations and opt-in native Assist configuration."""
 
     async def async_step_init(  # noqa: PLR0912 -- report each independent option error.
@@ -123,6 +124,8 @@ class TextbeltOptionsFlow(config_entries.OptionsFlowWithReload):
                     except ValueError:
                         errors[key] = error
             if options.get(CONF_ASSIST_ENABLED, False):
+                if not reply_key_usable(self.config_entry.data.get(CONF_API_KEY)):
+                    errors["base"] = "invalid_reply_key"
                 if (
                     not options.get(CONF_AUTHORIZED_SENDERS)
                     and CONF_AUTHORIZED_SENDERS not in errors
@@ -144,14 +147,14 @@ class TextbeltOptionsFlow(config_entries.OptionsFlowWithReload):
                         errors[CONF_PIPELINE_ID] = "invalid_pipeline"
             if not errors:
                 return self.async_create_entry(title="", data=options)
-        defaults = self.config_entry.options
+        defaults = {**self.config_entry.options, **(user_input or {})}
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
                     vol.Optional(
                         CONF_NOTIFICATION_RECIPIENTS,
-                        default="\n".join(
+                        default=_phone_form_value(
                             defaults.get(CONF_NOTIFICATION_RECIPIENTS, [])
                         ),
                     ): TextSelector(TextSelectorConfig(multiline=True)),
@@ -171,7 +174,7 @@ class TextbeltOptionsFlow(config_entries.OptionsFlowWithReload):
                     vol.Optional(
                         CONF_AUTHORIZED_SENDERS,
                         description={
-                            "suggested_value": "\n".join(
+                            "suggested_value": _phone_form_value(
                                 defaults.get(CONF_AUTHORIZED_SENDERS, [])
                             )
                         },
@@ -190,3 +193,8 @@ class TextbeltOptionsFlow(config_entries.OptionsFlowWithReload):
             ),
             errors=errors,
         )
+
+
+def _phone_form_value(value: str | list[str]) -> str:
+    """Preserve raw submitted text on validation redisplay."""
+    return value if isinstance(value, str) else "\n".join(value)

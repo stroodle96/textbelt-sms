@@ -35,7 +35,8 @@
       "authorized_sender_required": "Add at least one authorized Assist sender.",
       "invalid_pipeline": "Select an existing Assist pipeline or the preferred pipeline.",
       "invalid_callback_url": "Configure a public HTTPS Home Assistant external URL without credentials, query parameters, or a fragment.",
-      "invalid_timeout": "Use an integer from 1 to 86400 seconds."
+      "invalid_timeout": "Use an integer from 1 to 86400 seconds.",
+      "invalid_reply_key": "Native Assist requires a non-free, reply-capable Textbelt key."
     }
   }
 }

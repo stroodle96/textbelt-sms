@@ -212,6 +212,8 @@ async def test_completed_speech_only(
     result = await async_run_assist(
         hass, text="hello", pipeline_id=None, conversation_id=None, context=Context()
     )
+    assert result.ha_session_id in hass.data[chat_session.DATA_CHAT_SESSION]
+    assert result.ha_session_id != "agent-session"
     assert (result.reply, result.error_code, result.conversation_id) == (
         reply,
         error,
