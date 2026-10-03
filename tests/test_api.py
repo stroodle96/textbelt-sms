@@ -1,6 +1,7 @@
 # Copyright (c) 2019 - 2025  Joakim Sørensen @ludeeus
 """Tests for the Textbelt HTTP client."""
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import aiohttp
@@ -11,6 +12,8 @@ from custom_components.textbelt_sms.api import (
     TextbeltApiClientAuthenticationError,
     TextbeltApiClientCommunicationError,
     TextbeltApiClientError,
+    TextbeltApiClientUnknownOutcomeError,
+    normalize_text_id,
 )
 
 
@@ -51,6 +54,8 @@ async def test_send_sms_posts_exact_payload_with_webhook(api_base_url: str) -> N
     assert result == {"success": True, "textId": "abc"}
     session.post.assert_called_once_with(
         f"{api_base_url}/text",
+        timeout=aiohttp.ClientTimeout(total=20),
+        allow_redirects=False,
         data={
             "phone": "+15551234567",
             "message": "hello",
@@ -64,13 +69,15 @@ async def test_send_sms_posts_exact_payload_with_webhook(api_base_url: str) -> N
 async def test_send_sms_uses_default_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
     """Use production Textbelt when no test endpoint override is set."""
     monkeypatch.delenv("TEXTBELT_SMS_API_BASE_URL", raising=False)
-    response = _response(200, {"success": True})
+    response = _response(200, {"success": True, "textId": "abc"})
     session = _session(response)
 
     await TextbeltApiClient("secret", session).async_send_sms("+1", "hello")
 
     session.post.assert_called_once_with(
         "https://textbelt.com/text",
+        timeout=aiohttp.ClientTimeout(total=20),
+        allow_redirects=False,
         data={"phone": "+1", "message": "hello", "key": "secret"},
     )
 
@@ -81,13 +88,15 @@ async def test_send_sms_normalizes_base_url(
 ) -> None:
     """Normalize trailing slashes on a configured API endpoint."""
     monkeypatch.setenv("TEXTBELT_SMS_API_BASE_URL", f"{api_base_url}/")
-    response = _response(200, {"success": True})
+    response = _response(200, {"success": True, "textId": "abc"})
     session = _session(response)
 
     await TextbeltApiClient("secret", session).async_send_sms("+1", "hello")
 
     session.post.assert_called_once_with(
         f"{api_base_url}/text",
+        timeout=aiohttp.ClientTimeout(total=20),
+        allow_redirects=False,
         data={"phone": "+1", "message": "hello", "key": "secret"},
     )
 
@@ -108,7 +117,7 @@ async def test_send_sms_raises_api_error() -> None:
     """Propagate a provider-declared failure as a client error."""
     response = _response(200, {"success": False, "error": "no credits"})
 
-    with pytest.raises(TextbeltApiClientError, match="no credits"):
+    with pytest.raises(TextbeltApiClientError, match="rejected"):
         await TextbeltApiClient("secret", _session(response)).async_send_sms(
             "+1", "hello"
         )
@@ -174,7 +183,11 @@ async def test_get_status_uses_exact_path_without_key_or_query(
     result = await TextbeltApiClient("secret", session).async_get_status("abc")
 
     assert result == {"status": "DELIVERED"}
-    session.get.assert_called_once_with(f"{api_base_url}/status/abc")
+    session.get.assert_called_once_with(
+        f"{api_base_url}/status/abc",
+        timeout=aiohttp.ClientTimeout(total=10),
+        allow_redirects=False,
+    )
 
 
 @pytest.mark.asyncio
@@ -185,7 +198,11 @@ async def test_get_status_normalizes_valid_text_id(
     """Accept numeric or non-empty string IDs and normalize them in the path."""
     session = _get_session(_response(200, {"status": "PENDING"}))
     await TextbeltApiClient("secret", session).async_get_status(text_id)
-    session.get.assert_called_once_with(f"{api_base_url}/status/{path}")
+    session.get.assert_called_once_with(
+        f"{api_base_url}/status/{path}",
+        timeout=aiohttp.ClientTimeout(total=10),
+        allow_redirects=False,
+    )
 
 
 @pytest.mark.asyncio
@@ -342,3 +359,122 @@ async def test_get_quota_rejects_invalid_json() -> None:
     with pytest.raises(TextbeltApiClientError, match="invalid response") as caught:
         await TextbeltApiClient("secret", _get_session(response)).async_get_quota()
     assert caught.value.__suppress_context__
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"success": 1, "textId": "abc"},
+        {"success": "true", "textId": "abc"},
+        {"success": True},
+        {"success": True, "textId": None},
+        {"success": True, "textId": True},
+        {"success": True, "textId": " "},
+        {},
+        [],
+    ],
+)
+async def test_send_unknown_schema(payload: object) -> None:
+    """Malformed acceptance cannot establish a known send outcome."""
+    with pytest.raises(TextbeltApiClientCommunicationError) as caught:
+        await TextbeltApiClient(
+            "secret", _session(_response(200, payload))
+        ).async_send_sms("(555) 123-4567", "hello")
+    assert isinstance(caught.value, TextbeltApiClientUnknownOutcomeError)
+
+
+@pytest.mark.parametrize("status", [301, 302, 307, 308, 500, 503])
+async def test_send_uncertain_http(status: int) -> None:
+    """Redirects and server errors never establish rejection or acceptance."""
+    session = _session(_response(status, {"success": True, "textId": "abc"}))
+    with pytest.raises(TextbeltApiClientCommunicationError) as caught:
+        await TextbeltApiClient("secret", session).async_send_sms("+1", "hello")
+    assert isinstance(caught.value, TextbeltApiClientUnknownOutcomeError)
+    assert session.post.call_count == 1
+    assert session.post.call_args.kwargs["allow_redirects"] is False
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        TimeoutError("secret https://private"),
+        aiohttp.ClientConnectionError("secret https://private"),
+        ValueError("secret https://private"),
+    ],
+)
+async def test_send_safe_unknown_errors(error: Exception) -> None:
+    """Transport and parsing errors suppress raw provider data and never retry."""
+    response = _response(200, {})
+    response.json.side_effect = error
+    session = _session(response)
+    with pytest.raises(TextbeltApiClientCommunicationError) as caught:
+        await TextbeltApiClient("secret", session).async_send_sms("+1", "hello")
+    assert isinstance(caught.value, TextbeltApiClientUnknownOutcomeError)
+    assert "secret" not in str(caught.value)
+    assert "https" not in str(caught.value)
+    assert caught.value.__suppress_context__
+    assert session.post.call_count == 1
+
+
+async def test_send_normalized_id_and_actual_newline() -> None:
+    """Keep legacy phone and actual LF intact in the form payload."""
+    session = _session(_response(200, {"success": True, "textId": 123}))
+    result = await TextbeltApiClient("secret", session).async_send_sms(
+        "(555) 123-4567", "a\nb&c+d"
+    )
+    assert result["textId"] == "123"
+    assert session.post.call_args.kwargs["data"]["message"] == "a\nb&c+d"
+    assert session.post.call_args.kwargs["data"]["phone"] == "(555) 123-4567"
+
+
+async def test_send_rejection_sanitized() -> None:
+    """A declared rejection is known and provider error strings stay private."""
+    session = _session(
+        _response(200, {"success": False, "error": "secret https://private"})
+    )
+    with pytest.raises(TextbeltApiClientError) as caught:
+        await TextbeltApiClient("secret", session).async_send_sms("+1", "hello")
+    assert type(caught.value) is TextbeltApiClientError
+    assert "secret" not in str(caught.value)
+
+
+async def test_send_cancellation_propagates() -> None:
+    """Cancellation stays available to the sender's bookkeeping."""
+    session = _session(_response(200, {}))
+    session.post.return_value.__aenter__.side_effect = asyncio.CancelledError
+    with pytest.raises(asyncio.CancelledError):
+        await TextbeltApiClient("secret", session).async_send_sms("+1", "hello")
+
+
+async def test_status_redirect_rejected() -> None:
+    """Status reads must not follow redirects or accept their bodies."""
+    session = _get_session(_response(302, {"status": "DELIVERED"}))
+    with pytest.raises(TextbeltApiClientError):
+        await TextbeltApiClient("secret", session).async_get_status("abc")
+
+
+async def test_status_error_sanitized() -> None:
+    """A failed status request must not reveal underlying URLs."""
+    session = _get_session(_response(200, {}))
+    session.get.return_value.__aenter__.side_effect = aiohttp.ClientConnectionError(
+        "secret https://private"
+    )
+    with pytest.raises(TextbeltApiClientCommunicationError) as caught:
+        await TextbeltApiClient("secret", session).async_get_status("abc")
+    assert "secret" not in str(caught.value)
+    assert caught.value.__suppress_context__
+
+
+@pytest.mark.parametrize("text_id", [0, -1, 1.5, "x" * 129])
+async def test_get_status_rejects_noncanonical_ids(text_id: object) -> None:
+    """Reject IDs that cannot be safely correlated with verified replies."""
+    with pytest.raises(ValueError, match="numeric"):
+        await TextbeltApiClient(
+            "secret", _get_session(_response(200, {}))
+        ).async_get_status(text_id)
+
+
+@pytest.mark.parametrize("text_id", [" 0042 ", "a b"])
+def test_text_id_strings_preserve_identity(text_id: str) -> None:
+    """Never rewrite string IDs or invent a provider ID grammar."""
+    assert normalize_text_id(text_id) == text_id

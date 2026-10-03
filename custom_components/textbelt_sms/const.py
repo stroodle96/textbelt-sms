@@ -22,3 +22,19 @@ STATUS_PENDING = "pending"
 STATUS_DELIVERED = "delivered"
 STATUS_FAILED = "failed"
 STATUS_UNKNOWN = "unknown"
+
+CONF_WEBHOOK_ID = "webhook_id"
+SERVICE_START_CONVERSATION = "start_conversation"
+
+
+def reply_key_usable(value: object) -> bool:
+    """Reject known public/free and test keys without inferring account eligibility."""
+    return (
+        isinstance(value, str)
+        and bool(value)
+        and value.lower() != "textbelt"
+        and not value.lower().endswith("_test")
+    )
+
+
+CONFIG_VERSION = 2

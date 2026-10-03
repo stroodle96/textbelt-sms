@@ -140,3 +140,34 @@ Keep earlier releases for rollback, including the historical `v0.1.0` prerelease
 ## License
 
 By contributing, you agree that your contributions will be licensed under its MIT License.
+
+### Native Assist smoke fixture
+
+Run `LIVE_SMOKE=0 bash tests/smoke/run.sh` from a Linux/WSL shell with Docker
+Compose. Offline mode explicitly forces `http://textbelt:8080`, `smoke-test-key`
+and reserved synthetic recipients, overriding inherited provider endpoint/key
+settings. Exposed HA/stub ports bind only to localhost. The native fixture is
+forbidden in `LIVE_SMOKE=1`; historical live paths are outside routine validation.
+
+A smoke-only integration registers two deterministic HA conversation agents
+through the supported agent API. Signed callbacks enter the product's generated
+webhook and traverse its actual `PipelineRun`/`PipelineInput`. Assertions inspect
+admin pipeline debug WebSocket events, fresh context IDs, conversation IDs,
+read-only agent snapshots and observable stub sends. No routing automation,
+script, monkeypatched pipeline or product diagnostic backdoor is used.
+
+The synthetic `https://ha.example.com` external URL validates configuration only.
+The helper discovers the generated path in a captured send and posts signed
+fixtures to local HA. It never requests that public hostname. Migration changes
+only stopped disposable HA storage. Restart checks retain initiating IDs and
+admitted callback bodies; they enforce a restart deadline inside the local
+two-minute duplicate policy instead of silently allowing expiry.
+
+Artifacts include pipeline events, synthetic execution snapshots, callback-event
+observations, request/outcome ledgers, migration/registry snapshots, metadata
+Store snapshots, Compose status/configuration and logs. Native helper tokens pass through stdin; the legacy API helper still uses
+`--token` process arguments. Tokens are not intentionally saved in these artifacts. Fixture payloads, API keys and recipients
+are synthetic. The outcome ledger distinguishes rejection from acceptance followed
+by disconnect; native response failures must not repeat the pipeline or send.
+Actual coordinator-run evidence and remaining limits are recorded in
+[stage4-local-validation.md](docs/research/stage4-local-validation.md).

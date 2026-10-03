@@ -14,6 +14,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.textbelt_sms.api import TextbeltApiClientCommunicationError
 from custom_components.textbelt_sms.const import DOMAIN
+from custom_components.textbelt_sms.sender import PartResult, SendResult
 from custom_components.textbelt_sms.sensor import (
     LastMessage,
     LastMessageStatusSensor,
@@ -103,6 +104,10 @@ async def test_sensor_exposes_required_detail_attributes(hass: HomeAssistant) ->
         "text_id": "abc",
         "phone": "+1",
         "message": "hello",
+        "text_ids": ["abc"],
+        "part_statuses": {"abc": "pending"},
+        "submission_outcome": "accepted",
+        "total_parts": 1,
     }
     assert sensor.state_class is None
     await coordinator.async_shutdown()
@@ -175,7 +180,9 @@ class SetupSession:
         """Return a successful quota response."""
         return SetupResponse()
 
-    def post(self, _url: str, *, data: dict[str, str]) -> SetupResponse:
+    def post(
+        self, _url: str, *, data: dict[str, str], **_kwargs: object
+    ) -> SetupResponse:
         """Return a successful response."""
         del data
         return SetupResponse()
@@ -242,3 +249,82 @@ async def test_platform_setup_creates_guaranteed_status_entity_id(
     assert registry_entry is not None
     assert registry_entry.entity_id == "sensor.textbelt_sms_last_message_status"
     assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_batch_status_requires_every_accepted_part_and_complete_batch(
+    hass: HomeAssistant,
+) -> None:
+    """The final part cannot make the whole batch delivered."""
+    client = FakeClient({"status": "DELIVERED"})
+    client.async_get_status.side_effect = [
+        {"status": "PENDING"},
+        {"status": "DELIVERED"},
+    ]
+    coordinator = TextbeltStatusCoordinator(hass, client)
+    result = SendResult(
+        (PartResult(1, "one", "accepted"), PartResult(2, "two", "accepted")),
+        2,
+        "accepted",
+    )
+    coordinator.set_last_batch(result, "+1", "long")
+    await coordinator.async_refresh()
+    assert coordinator.data.status == MessageStatus.PENDING
+    assert coordinator.data.text_ids == ("one", "two")
+    assert coordinator.data.part_statuses == (
+        MessageStatus.PENDING,
+        MessageStatus.DELIVERED,
+    )
+    client.async_get_status.side_effect = [
+        {"status": "DELIVERED"},
+        {"status": "DELIVERED"},
+    ]
+    await coordinator.async_refresh()
+    assert coordinator.data.status == MessageStatus.DELIVERED
+    partial = SendResult(
+        (PartResult(1, "one", "accepted"), PartResult(2, None, "rejected")),
+        3,
+        "partial",
+    )
+    coordinator.set_last_batch(partial, "+1", "partial")
+    client.async_get_status.side_effect = [{"status": "DELIVERED"}]
+    await coordinator.async_refresh()
+    assert coordinator.data.status == MessageStatus.FAILED
+    await coordinator.async_shutdown()
+
+
+async def test_batch_status_stale_first_part_does_not_poll_remaining_old_ids(
+    hass: HomeAssistant,
+) -> None:
+    """A new batch generation stops an obsolete multi-ID refresh."""
+    client = BlockingClient()
+    coordinator = TextbeltStatusCoordinator(hass, client)
+    result = SendResult(
+        (PartResult(1, "old-one", "accepted"), PartResult(2, "old-two", "accepted")),
+        2,
+        "accepted",
+    )
+    coordinator.set_last_batch(result, "+1", "old")
+    refresh = asyncio.create_task(coordinator.async_refresh())
+    await client.started.wait()
+    coordinator.set_last_message("new", "+2", "new")
+    client.release.set()
+    await refresh
+    client.async_get_status.assert_awaited_once_with("old-one")
+    assert coordinator.data == LastMessage("new", "+2", "new")
+    await coordinator.async_shutdown()
+
+
+async def test_batch_unknown_submission_cannot_become_delivered(
+    hass: HomeAssistant,
+) -> None:
+    """Delivery of known accepted IDs cannot resolve an ambiguous next part."""
+    client = FakeClient({"status": "DELIVERED"})
+    coordinator = TextbeltStatusCoordinator(hass, client)
+    result = SendResult(
+        (PartResult(1, "one", "accepted"), PartResult(2, None, "unknown")), 3, "unknown"
+    )
+    coordinator.set_last_batch(result, "+1", "unknown batch")
+    await coordinator.async_refresh()
+    assert coordinator.data.part_statuses == (MessageStatus.DELIVERED,)
+    assert coordinator.data.status == MessageStatus.UNKNOWN
+    await coordinator.async_shutdown()

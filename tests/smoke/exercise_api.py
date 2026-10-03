@@ -4,10 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import hmac
 import json
 import os
 import sys
 import time
+from datetime import datetime
+from http import HTTPStatus
 from urllib import error, parse, request
 
 
@@ -41,6 +45,72 @@ def call(
     with request.urlopen(req, timeout=10) as response:  # noqa: S310
         content = response.read()
         return json.loads(content) if content else {}
+
+
+def decode_expected_response(
+    raw: bytes, *, status: int, expected: int = 200
+) -> dict | list:
+    """Require exact status and permit plaintext for expected errors."""
+    if status != expected:
+        message = f"Unexpected HTTP status: received {status}, expected {expected}"
+        raise SmokeError(message)
+    if expected >= HTTPStatus.BAD_REQUEST:
+        return {}
+    return json.loads(raw) if raw else {}
+
+
+def smoke_key(candidate: str) -> str:
+    """Force synthetic credentials for offline runs."""
+    return candidate if os.environ.get("LIVE_SMOKE") == "1" else "smoke-test-key"
+
+
+def signed_headers(raw: bytes, key: str, timestamp: str | None = None) -> dict:
+    """Independently sign the exact fixture bytes."""
+    timestamp = timestamp or str(int(time.time()))
+    return {
+        "Content-Type": "application/json",
+        "X-textbelt-timestamp": timestamp,
+        "X-textbelt-signature": hmac.new(
+            key.encode(), timestamp.encode("ascii") + raw, hashlib.sha256
+        ).hexdigest(),
+    }
+
+
+def callback_path(url: str) -> str:
+    """Validate captured configuration; never request the synthetic public host."""
+    parsed = parse.urlsplit(url)
+    if (
+        parsed.scheme != "https"
+        or parsed.netloc != "ha.example.com"
+        or not parsed.path.startswith("/api/webhook/")
+        or parsed.path.endswith("/textbelt_sms_reply")
+        or parsed.query
+    ):
+        message = "Unexpected generated callback configuration"
+        raise SmokeError(message)
+    return parsed.path
+
+
+def post_reply(
+    base: str,
+    path: str,
+    raw: bytes,
+    *,
+    timestamp: str | None = None,
+    signed: bool = True,
+) -> int:
+    """POST fixtures only to local HA, returning deliberate safe statuses."""
+    headers = (
+        signed_headers(raw, "smoke-test-key", timestamp)
+        if signed
+        else {"Content-Type": "application/json"}
+    )
+    req = request.Request(base + path, data=raw, headers=headers, method="POST")  # noqa: S310
+    try:
+        with request.urlopen(req, timeout=10) as response:  # noqa: S310
+            return response.status
+    except error.HTTPError as exc:
+        return exc.code
 
 
 def stub_call(stub: str, path: str) -> dict:
@@ -196,7 +266,78 @@ def exercise_restart(base: str, token: str, *, use_stub: bool) -> None:
         wait_for_state(base, token, "96", QUOTA_ENTITY)
 
 
-def main() -> None:
+def exercise_notify(base: str, token: str, stub: str, api_key: str) -> None:
+    """Configure a synthetic recipient and verify a native notify send locally."""
+    entries = call(f"{base}/api/config/config_entries/entry", token)
+    entry = next(entry for entry in entries if entry.get("domain") == "textbelt_sms")
+    flow = call(
+        f"{base}/api/config/config_entries/options/flow",
+        token,
+        "POST",
+        {"handler": entry["entry_id"]},
+    )
+    result = call(
+        f"{base}/api/config/config_entries/options/flow/{flow['flow_id']}",
+        token,
+        "POST",
+        {"notification_recipients": "+15551234567"},
+    )
+    if result.get("type") != "create_entry":
+        raise SmokeError(f"Recipient options flow failed: {result}")
+    for _ in range(60):
+        states = call(f"{base}/api/states", token)
+        entities = [
+            state
+            for state in states
+            if state["entity_id"].startswith("notify.textbelt_sms")
+        ]
+        if len(entities) == 1 and entities[0]["state"] != "unavailable":
+            break
+        time.sleep(1)
+    else:
+        raise SmokeError(f"Native notify entity did not load: {entities}")
+    entity = entities[0]
+    if "+15551234567" in json.dumps(entity):
+        message = "Native notify entity exposes the full recipient"
+        raise SmokeError(message)
+    if "4567" not in entity.get("attributes", {}).get("friendly_name", ""):
+        raise SmokeError(
+            f"Native notify name does not identify masked recipient: {entity}"
+        )
+    call(
+        f"{base}/api/services/notify/send_message",
+        token,
+        "POST",
+        {
+            "entity_id": entity["entity_id"],
+            "title": "Water leak",
+            "message": "Water was detected in utility room.",
+        },
+    )
+    for _ in range(30):
+        state = call(f"{base}/api/states/{entity['entity_id']}", token)
+        if state.get("state") not in (None, "unknown", "unavailable", entity["state"]):
+            datetime.fromisoformat(state["state"])
+            break
+        time.sleep(1)
+    else:
+        raise SmokeError(
+            f"Native notify did not report a successful timestamp: {state}"
+        )
+    requests = call(f"{stub}/requests").get("requests", [])
+    expected = {
+        "phone": "+15551234567",
+        "message": "Water leak: Water was detected in utility room.",
+        "key": api_key,
+    }
+    expected_count = 4
+    if len(requests) != expected_count or any(
+        requests[-1].get(key) != value for key, value in expected.items()
+    ):
+        raise SmokeError(f"Unexpected native notify stub request: {requests}")
+
+
+def main() -> None:  # noqa: PLR0915
     """Run the onboarding, config-entry, service, and webhook smoke checks."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--token")
@@ -207,23 +348,31 @@ def main() -> None:
     parser.add_argument(
         "--stub", default=os.environ.get("TEXTBELT_STUB_URL", "http://127.0.0.1:8080")
     )
+    parser.add_argument("--notify-only", action="store_true")
     parser.add_argument("--failure", action="store_true")
     parser.add_argument("--webhook-only", action="store_true")
     parser.add_argument("--verify-runtime", action="store_true")
     parser.add_argument("--refresh-only", action="store_true")
     args = parser.parse_args()
+    args.api_key = smoke_key(args.api_key)
     use_stub = os.environ.get("LIVE_SMOKE") != "1"
+    if use_stub:
+        args.stub = "http://127.0.0.1:8080"
     if args.failure and not args.token:
         parser.error("--failure requires --token from the initial smoke run")
     wait_for_ha(args.base)
     token = args.token or bootstrap_token(args.base)
+    if args.notify_only:
+        if use_stub:
+            exercise_notify(args.base, token, args.stub, args.api_key)
+        return
     if args.webhook_only:
-        call(
-            f"{args.base}/api/webhook/textbelt_sms_reply",
-            "",
-            "POST",
-            {"text": "reply"},
-        )
+        raw = json.dumps(
+            {"textId": "legacy", "fromNumber": "+15551234567", "text": "reply"}
+        ).encode()
+        if post_reply(args.base, "/api/webhook/textbelt_sms_reply", raw) != 200:  # noqa: PLR2004
+            message = "Signed legacy webhook failed"
+            raise SmokeError(message)
         return
     if args.refresh_only:
         call(
@@ -253,9 +402,8 @@ def main() -> None:
             "message": "smoke",
             "key": args.api_key,
         }
-        expected_request["replyWebhookUrl"] = (
-            "http://homeassistant:8123/api/webhook/textbelt_sms_reply"
-        )
+        expected_request["replyWebhookUrl"] = requests[0].get("replyWebhookUrl")
+        callback_path(expected_request["replyWebhookUrl"])
         if len(requests) != 1 or requests[0] != expected_request:
             raise SmokeError(f"Unexpected Textbelt stub request: {requests}")
         wait_for_state(args.base, token, "97", QUOTA_ENTITY)

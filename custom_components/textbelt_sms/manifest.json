@@ -1,6 +1,9 @@
 {
   "domain": "textbelt_sms",
   "name": "Textbelt SMS",
+  "after_dependencies": [
+    "assist_pipeline"
+  ],
   "codeowners": [
     "@stroodle96"
   ],
@@ -9,8 +12,6 @@
   "documentation": "https://github.com/stroodle96/textbelt-sms",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/stroodle96/textbelt-sms/issues",
-  "requirements": [
-    "aiohttp"
-  ],
-  "version": "0.2.0"
+  "requirements": [],
+  "version": "0.3.0"
 }
