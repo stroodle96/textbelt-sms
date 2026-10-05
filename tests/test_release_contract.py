@@ -34,6 +34,15 @@ def test_beta_version_returns_prefixed_tag(tmp_path: Path) -> None:
     )
 
 
+def test_beta_cannot_be_published_as_stable(tmp_path: Path) -> None:
+    """A beta must not create or promote a stable GitHub release."""
+    version = "0.3.0b1"
+    with pytest.raises(
+        ValueError, match="Beta versions require the prerelease channel"
+    ):
+        validate_release_version(version, write_manifest(tmp_path, version), "stable")
+
+
 @pytest.mark.parametrize(
     "version",
     [

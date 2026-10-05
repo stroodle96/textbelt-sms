@@ -114,7 +114,9 @@ after merge and verify publication before announcing that version as available i
    manifest, restart Home Assistant, and confirm the integration loads. The local
    HA smoke harness tests the checked-out code; it does not prove HACS discovery
    or installation. Routine SMS behavior checks use the local Textbelt stub.
-6. After the HACS check passes, promote the same release by dispatching **Release**
+6. For a numbered beta such as `0.3.0b1`, prepare a new plain-version release
+   such as `0.3.0`; beta tags cannot be promoted to stable. For a plain-version
+   prerelease, after the HACS check passes, promote the same release by dispatching **Release**
    from `main` with the same version and `stable`. Main's manifest must still
    contain that version. The workflow retests the immutable tagged code before
    promotion; it does not move the tag:

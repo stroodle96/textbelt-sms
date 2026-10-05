@@ -55,9 +55,10 @@ jobs:
         id: contract
         env:
           VERSION: ${{ inputs.version }}
+          CHANNEL: ${{ inputs.channel }}
         shell: bash
         run: |
-          tag="$(python scripts/release_contract.py --version "$VERSION")"
+          tag="$(python scripts/release_contract.py --version "$VERSION" --channel "$CHANNEL")"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Determine allowed release operation
@@ -115,7 +116,8 @@ jobs:
         if: steps.state.outputs.operation == 'promote'
         env:
           VERSION: ${{ inputs.version }}
-        run: python scripts/release_contract.py --version "$VERSION"
+          CHANNEL: ${{ inputs.channel }}
+        run: python scripts/release_contract.py --version "$VERSION" --channel "$CHANNEL"
 
       - name: Run unit tests
         run: python -m pytest

@@ -14,10 +14,16 @@ RELEASE_VERSION = re.compile(
 )
 
 
-def validate_release_version(version: str, manifest_path: Path) -> str:
+def validate_release_version(
+    version: str, manifest_path: Path, channel: str = "prerelease"
+) -> str:
     """Validate VERSION against MANIFEST_PATH and return its Git tag."""
     if RELEASE_VERSION.fullmatch(version) is None:
         message = f"{version!r} is not strict MAJOR.MINOR.PATCH with optional bN beta"
+        raise ValueError(message)
+
+    if "b" in version and channel != "prerelease":
+        message = "Beta versions require the prerelease channel"
         raise ValueError(message)
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -39,6 +45,9 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--version", required=True)
     parser.add_argument(
+        "--channel", choices=("prerelease", "stable"), default="prerelease"
+    )
+    parser.add_argument(
         "--manifest",
         type=Path,
         default=Path("custom_components/textbelt_sms/manifest.json"),
@@ -46,7 +55,7 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        tag = validate_release_version(args.version, args.manifest)
+        tag = validate_release_version(args.version, args.manifest, args.channel)
         sys.stdout.write(f"{tag}\n")
     except (OSError, json.JSONDecodeError, ValueError) as err:
         parser.error(str(err))
