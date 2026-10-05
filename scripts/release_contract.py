@@ -9,13 +9,15 @@ import re
 import sys
 from pathlib import Path
 
-STRICT_SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
+RELEASE_VERSION = re.compile(
+    r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:b[1-9]\d*)?$"
+)
 
 
 def validate_release_version(version: str, manifest_path: Path) -> str:
     """Validate VERSION against MANIFEST_PATH and return its Git tag."""
-    if STRICT_SEMVER.fullmatch(version) is None:
-        message = f"{version!r} is not strict MAJOR.MINOR.PATCH"
+    if RELEASE_VERSION.fullmatch(version) is None:
+        message = f"{version!r} is not strict MAJOR.MINOR.PATCH with optional bN beta"
         raise ValueError(message)
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))

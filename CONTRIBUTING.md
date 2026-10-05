@@ -84,6 +84,9 @@ after merge and verify publication before announcing that version as available i
 1. Merge the version change into `main` and confirm lint, unit tests, the local
    Textbelt stub/HA smoke test, Hassfest, and HACS validation pass. The integration
    manifest must contain the exact version being released, without the `v` prefix.
+   Numbered beta builds use `MAJOR.MINOR.PATCHbN` (starting at `b1`), for example
+   `0.3.0b1` with tag `v0.3.0b1`. Publish beta builds on the `prerelease` channel;
+   stable releases use plain `MAJOR.MINOR.PATCH` versions.
 2. Check the [existing tags](https://github.com/stroodle96/textbelt-sms/tags) and
    [releases](https://github.com/stroodle96/textbelt-sms/releases). Never move or
    recreate an existing release tag. If a tag exists without a release, investigate

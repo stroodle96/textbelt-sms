@@ -26,12 +26,31 @@ def test_valid_version_returns_prefixed_tag(tmp_path: Path) -> None:
     assert validate_release_version("0.2.0", write_manifest(tmp_path)) == "v0.2.0"
 
 
+def test_beta_version_returns_prefixed_tag(tmp_path: Path) -> None:
+    """A numbered beta produces an exact HACS-compatible prerelease tag."""
+    version = "0.3.0b1"
+    assert validate_release_version(version, write_manifest(tmp_path, version)) == (
+        "v0.3.0b1"
+    )
+
+
 @pytest.mark.parametrize(
     "version",
-    ["v0.2.0", "0.2", "0.2.0b1", "01.2.3", "0.02.3", "0.2.03", "0.2.0+build"],
+    [
+        "v0.2.0",
+        "0.2",
+        "0.3.0b0",
+        "0.3.0b01",
+        "0.3.0b",
+        "0.3.0b-1",
+        "01.2.3",
+        "0.02.3",
+        "0.2.03",
+        "0.2.0+build",
+    ],
 )
 def test_invalid_versions_are_rejected(tmp_path: Path, version: str) -> None:
-    """Only strict numeric MAJOR.MINOR.PATCH versions are accepted."""
+    """Malformed versions and noncanonical beta numbers are rejected."""
     with pytest.raises(ValueError, match=r"strict MAJOR\.MINOR\.PATCH"):
         validate_release_version(version, write_manifest(tmp_path))
 
