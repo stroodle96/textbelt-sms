@@ -67,7 +67,7 @@ class Session:
             return Response({"success": self.quota_ok, "quotaRemaining": self.balance})
         return Response({"status": "DELIVERED"})
 
-    def post(self, _url: str, *, data: dict) -> Response:
+    def post(self, _url: str, *, data: dict, **_kwargs: object) -> Response:
         """Send against the configured key and consume a credit on success."""
         assert data["key"] == "quota-test-key"
         self.sends += 1

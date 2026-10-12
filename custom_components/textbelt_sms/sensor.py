@@ -40,6 +40,8 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+    from .sender import SendResult
+
 
 class MessageStatus(StrEnum):
     """Public delivery states exposed by the sensor."""
@@ -54,10 +56,14 @@ class MessageStatus(StrEnum):
 class LastMessage:
     """Last message sent through this integration."""
 
-    text_id: str
+    text_id: str | None
     phone: str
     message: str
     status: MessageStatus = MessageStatus.PENDING
+    text_ids: tuple[str, ...] = ()
+    part_statuses: tuple[MessageStatus, ...] = ()
+    submission_outcome: str = "accepted"
+    total_parts: int = 1
 
 
 class TextbeltStatusCoordinator(DataUpdateCoordinator[LastMessage | None]):
@@ -85,15 +91,6 @@ class TextbeltStatusCoordinator(DataUpdateCoordinator[LastMessage | None]):
         generation = self._generation
         if snapshot is None:
             return None
-        try:
-            response = await self.client.async_get_status(snapshot.text_id)
-        except TextbeltApiClientError as err:
-            msg = "Unable to fetch Textbelt message status"
-            raise UpdateFailed(msg) from err
-        if not self._active:
-            raise UpdateFailed(INACTIVE_COORDINATOR_ERROR)
-        if generation != self._generation:
-            return self.data
         status_map = {
             "pending": MessageStatus.PENDING,
             "sending": MessageStatus.PENDING,
@@ -102,14 +99,69 @@ class TextbeltStatusCoordinator(DataUpdateCoordinator[LastMessage | None]):
             "failed": MessageStatus.FAILED,
             "unknown": MessageStatus.UNKNOWN,
         }
-        status = status_map.get(
-            str(response.get("status", STATUS_UNKNOWN)).lower(),
-            MessageStatus.UNKNOWN,
+        statuses = []
+        ids = snapshot.text_ids or ((snapshot.text_id,) if snapshot.text_id else ())
+        try:
+            for text_id in ids:
+                response = await self.client.async_get_status(text_id)
+                if not self._active:
+                    raise UpdateFailed(INACTIVE_COORDINATOR_ERROR)
+                if generation != self._generation:
+                    return self.data
+                statuses.append(
+                    status_map.get(
+                        str(response.get("status", STATUS_UNKNOWN)).lower(),
+                        MessageStatus.UNKNOWN,
+                    )
+                )
+        except TextbeltApiClientError as err:
+            msg = "Unable to fetch Textbelt message status"
+            raise UpdateFailed(msg) from err
+        if not self._active:
+            raise UpdateFailed(INACTIVE_COORDINATOR_ERROR)
+        if generation != self._generation:
+            return self.data
+        status = self._aggregate(snapshot.submission_outcome, tuple(statuses))
+        return replace(
+            snapshot,
+            status=status,
+            part_statuses=tuple(statuses) if snapshot.text_ids else (),
         )
-        return replace(snapshot, status=status)
+
+    @staticmethod
+    def _aggregate(outcome: str, statuses: tuple[MessageStatus, ...]) -> MessageStatus:
+        """Only a complete accepted batch can become delivered."""
+        if outcome in {"rejected", "partial"} or MessageStatus.FAILED in statuses:
+            return MessageStatus.FAILED
+        if outcome == "unknown" or not statuses or MessageStatus.UNKNOWN in statuses:
+            return MessageStatus.UNKNOWN
+        if all(status == MessageStatus.DELIVERED for status in statuses):
+            return MessageStatus.DELIVERED
+        return MessageStatus.PENDING
+
+    def set_last_batch(self, result: SendResult, phone: str, message: str) -> None:
+        """Publish all known IDs and the submission outcome of the last attempt."""
+        if not self._active:
+            return
+        self._generation += 1
+        statuses = tuple(MessageStatus.PENDING for _ in result.text_ids)
+        self.async_set_updated_data(
+            LastMessage(
+                result.text_ids[-1] if result.text_ids else None,
+                phone,
+                message,
+                self._aggregate(result.outcome, statuses),
+                result.text_ids,
+                statuses,
+                result.outcome,
+                result.total_parts,
+            )
+        )
 
     def set_last_message(self, text_id: int | str, phone: str, message: str) -> None:
         """Publish a newly sent message as pending immediately."""
+        if not self._active:
+            return
         self._generation += 1
         self.async_set_updated_data(
             LastMessage(normalize_text_id(text_id), phone, message)
@@ -174,7 +226,7 @@ class LastMessageStatusSensor(
         return self.coordinator.last_update_success is not False
 
     @property
-    def extra_state_attributes(self) -> dict[str, str | None]:
+    def extra_state_attributes(self) -> dict[str, object]:
         """Return the required last-message detail attributes."""
         message = self.coordinator.data
         status = self.native_value
@@ -183,6 +235,24 @@ class LastMessageStatusSensor(
             ATTR_TEXT_ID: message.text_id if message else None,
             ATTR_PHONE: message.phone if message else None,
             ATTR_MESSAGE: message.message if message else None,
+            "text_ids": list(
+                message.text_ids or ((message.text_id,) if message.text_id else ())
+            )
+            if message
+            else [],
+            "part_statuses": {
+                text_id: status.value
+                for text_id, status in zip(
+                    message.text_ids or ((message.text_id,) if message.text_id else ()),
+                    message.part_statuses
+                    or ((message.status,) if message.text_id else ()),
+                    strict=True,
+                )
+            }
+            if message
+            else {},
+            "submission_outcome": message.submission_outcome if message else None,
+            "total_parts": message.total_parts if message else 0,
         }
 
 

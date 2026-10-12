@@ -56,7 +56,8 @@ async def test_user_form_creates_entry(hass: HomeAssistant) -> None:
 
     assert result["type"] == "create_entry"
     assert result["title"] == "Textbelt SMS"
-    assert result["data"] == {CONF_API_KEY: "test-key"}
+    assert result["data"][CONF_API_KEY] == "test-key"
+    assert len(result["data"]["webhook_id"]) == 64  # noqa: PLR2004 -- strong random ID.
 
 
 async def test_user_form_allows_only_one_instance(hass: HomeAssistant) -> None:

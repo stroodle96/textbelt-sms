@@ -1,0 +1,269 @@
+{
+  "retrieval_date": "2026-09-30",
+  "method": "GitHub connector pinned file reads",
+  "upstream_commit": "b1e7c8f1ef4c90741c8d25134fc1fe3800d76895",
+  "local_synthetic_baseline": "8eccbaa86980fb161a7f6a5d5b37c52ace00ca5c",
+  "note": "Raw upstream blob bytes verified; git attributes normalize CRLF in local git index. Not an upstream clone.",
+  "files": [
+    {
+      "path": ".devcontainer.json",
+      "mode": "100644",
+      "sha": "9c0613e5cc75a159b06b38e4f1723ccab9e2501d"
+    },
+    {
+      "path": ".gitattributes",
+      "mode": "100644",
+      "sha": "94f480de94e1d767531580401cbf13844868e82b"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/bug.yml",
+      "mode": "100644",
+      "sha": "efa0cd9f053766cc8f2c6687839732b1d283e339"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/config.yml",
+      "mode": "100644",
+      "sha": "ec4bb386bcf8a4946923eff961cc7cdf70c0aedf"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/feature_request.yml",
+      "mode": "100644",
+      "sha": "73b0cad85afaa6f2f818b6f8c3c8083369c819b0"
+    },
+    {
+      "path": ".github/dependabot.yml",
+      "mode": "100644",
+      "sha": "4f1901a6b43c2a4799901dc7c9df8596058dc149"
+    },
+    {
+      "path": ".github/instructions/copilot-instructions.md",
+      "mode": "100644",
+      "sha": "872313c7f1c014ee3aabf72b4799252862c58a1f"
+    },
+    {
+      "path": ".github/workflows/ha-smoke.yml",
+      "mode": "100644",
+      "sha": "6bf49a85b599251eface51e8dad11791eaa087da"
+    },
+    {
+      "path": ".github/workflows/lint.yml",
+      "mode": "100644",
+      "sha": "3614236c8671f808d06adbc1661a393a10d30b1f"
+    },
+    {
+      "path": ".github/workflows/live-smoke.yml",
+      "mode": "100644",
+      "sha": "eb774a7061d87c8cfa6b01843abd834a5f6643c3"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "mode": "100644",
+      "sha": "11b7cf011d52544684fad050269b253ca373df45"
+    },
+    {
+      "path": ".github/workflows/unit-test.yml",
+      "mode": "100644",
+      "sha": "b4e5614bb3a9bf99a440b9f62b2fb56d1d5ab77c"
+    },
+    {
+      "path": ".github/workflows/validate.yml",
+      "mode": "100644",
+      "sha": "abf2951a996c14378d642240dfd81724aaad9bd3"
+    },
+    {
+      "path": ".gitignore",
+      "mode": "100644",
+      "sha": "8414c1decf3a59be0758c67f877768ff7fbb6b36"
+    },
+    {
+      "path": ".ruff.toml",
+      "mode": "100644",
+      "sha": "da1ac577797c6b751de8c301a5d65f1225684e75"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "mode": "100644",
+      "sha": "a7649b4f6a8957e3b8810cc743cfaaebab7b0f81"
+    },
+    {
+      "path": "LICENSE",
+      "mode": "100644",
+      "sha": "a1056f447c7598cdd0d531e459a2237d30e760a9"
+    },
+    {
+      "path": "README.md",
+      "mode": "100644",
+      "sha": "03cd9bbc8c37b4b80b9a2806fa736789e57ca6f3"
+    },
+    {
+      "path": "config/configuration.yaml",
+      "mode": "100644",
+      "sha": "e36e39f172d94f03dc9218ccc55f519001f501ab"
+    },
+    {
+      "path": "custom_components/textbelt_sms/__init__.py",
+      "mode": "100644",
+      "sha": "5d7a41d240f91685690ad50c1c4da9ae48016b4b"
+    },
+    {
+      "path": "custom_components/textbelt_sms/api.py",
+      "mode": "100644",
+      "sha": "2e7810ad84d91cb83f447e49f9be2bd9674a3711"
+    },
+    {
+      "path": "custom_components/textbelt_sms/config_flow.py",
+      "mode": "100644",
+      "sha": "4d6ceab23c77745c5854927dd25ae2de6a2c47da"
+    },
+    {
+      "path": "custom_components/textbelt_sms/const.py",
+      "mode": "100644",
+      "sha": "5725447c05e69716d0b472a91ce35d580de95db6"
+    },
+    {
+      "path": "custom_components/textbelt_sms/manifest.json",
+      "mode": "100644",
+      "sha": "d5b831cd5e11e4154d6363f44acb3e5f4b49c214"
+    },
+    {
+      "path": "custom_components/textbelt_sms/sensor.py",
+      "mode": "100644",
+      "sha": "7fa4d6cc044da89e94d1fbb777562bf3c1691b1d"
+    },
+    {
+      "path": "custom_components/textbelt_sms/services.yaml",
+      "mode": "100644",
+      "sha": "dc05306930274881aa0d604e188332ab46bf86e7"
+    },
+    {
+      "path": "custom_components/textbelt_sms/translations/en.json",
+      "mode": "100644",
+      "sha": "c94b113544cd00dda3a73c27178e73b4920f597b"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-09-20-hacs-versioning.md",
+      "mode": "100644",
+      "sha": "7073a68b322838da68a56c190b0debf215f76a80"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-09-20-hacs-versioning-design.md",
+      "mode": "100644",
+      "sha": "c42bfb216817e5e5ae8e8baa4ffa86b945c267c3"
+    },
+    {
+      "path": "hacs.json",
+      "mode": "100644",
+      "sha": "0bbd60c73088e31c9c4ce9422a6aa890fb6fc9ba"
+    },
+    {
+      "path": "pytest.ini",
+      "mode": "100644",
+      "sha": "580e0fef63af4ef8d9cc3d1b7ff631353f5327ff"
+    },
+    {
+      "path": "requirements.txt",
+      "mode": "100644",
+      "sha": "d20239966948c405900c6f4d864b222d6795bdfa"
+    },
+    {
+      "path": "requirements_test.txt",
+      "mode": "100644",
+      "sha": "67c2e131894e3c424c1887ba1700fbde403c844f"
+    },
+    {
+      "path": "scripts/__init__.py",
+      "mode": "100644",
+      "sha": "8b7098909b7f0c48c2b4cdadfb9bac4315d1eaa9"
+    },
+    {
+      "path": "scripts/develop",
+      "mode": "100755",
+      "sha": "4cc71a92a8794e68eb1c6324c9d67700b482dced"
+    },
+    {
+      "path": "scripts/lint",
+      "mode": "100755",
+      "sha": "5d68d15badc9d7c137ea3b78dcd9009283c03d87"
+    },
+    {
+      "path": "scripts/release_contract.py",
+      "mode": "100644",
+      "sha": "64f88a9c2b3977d7dfc9e48c156a3f70c6bd9479"
+    },
+    {
+      "path": "scripts/setup",
+      "mode": "100755",
+      "sha": "141d19f9dfd956b903091c8ac2dd459ea57a2184"
+    },
+    {
+      "path": "tests/__init__.py",
+      "mode": "100644",
+      "sha": "66bd293bf4154b08e31356629bf892430b0d47ac"
+    },
+    {
+      "path": "tests/conftest.py",
+      "mode": "100644",
+      "sha": "886b09ff652735e73550c0c7bbdb4c1bf5240bd0"
+    },
+    {
+      "path": "tests/smoke/__init__.py",
+      "mode": "100644",
+      "sha": "ec02175f1683deec4f1219c5d9e57cf034751ef5"
+    },
+    {
+      "path": "tests/smoke/docker-compose.yml",
+      "mode": "100644",
+      "sha": "415c45564fce966bac10d1bac97270a4c4afc49d"
+    },
+    {
+      "path": "tests/smoke/exercise_api.py",
+      "mode": "100644",
+      "sha": "0dacb622928792150fe2e00e5109ec5d45346c16"
+    },
+    {
+      "path": "tests/smoke/run.sh",
+      "mode": "100644",
+      "sha": "69e56ccfe0524b2446ba76bb990eca51bdb4301c"
+    },
+    {
+      "path": "tests/smoke/test_exercise_api.py",
+      "mode": "100644",
+      "sha": "7500083796e088156a3f781f856c15cfe20e9561"
+    },
+    {
+      "path": "tests/smoke/textbelt_stub.py",
+      "mode": "100644",
+      "sha": "8527dc4a4f77f9b450ce2a8dab23bca53672b960"
+    },
+    {
+      "path": "tests/test_api.py",
+      "mode": "100644",
+      "sha": "fd296f72fadff3d7402447644f234d270e215453"
+    },
+    {
+      "path": "tests/test_config_flow.py",
+      "mode": "100644",
+      "sha": "2b5ec998f19ee608054bf1482b51c789f58ac7c8"
+    },
+    {
+      "path": "tests/test_init.py",
+      "mode": "100644",
+      "sha": "c442734b324db82b514127af4af190ae815444aa"
+    },
+    {
+      "path": "tests/test_quota_sensor.py",
+      "mode": "100644",
+      "sha": "d043e991609371763b08bef397d725a822150a4d"
+    },
+    {
+      "path": "tests/test_release_contract.py",
+      "mode": "100644",
+      "sha": "1eb984f56911fcb947470a2408db4bfba47e80f9"
+    },
+    {
+      "path": "tests/test_sensor.py",
+      "mode": "100644",
+      "sha": "9f597d86bfb51b5621212ea06f29e87a4219b050"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "status": "blocked_pending_provider_and_carrier_evidence",
+  "allowed_characters": [],
+  "candidate_source": "v1-inputs-and-pending-results.jsonl",
+  "encoding": null,
+  "weights": null,
+  "provider_request_limit": null,
+  "per_part_budget": null,
+  "automatic_splitting": null,
+  "credit_cost": null,
+  "reply_window": null,
+  "reply_countries": null,
+  "callback_authentication": null,
+  "integration_part_cap": null,
+  "proposed_integration_part_cap": 5,
+  "activation_permitted": false
+}

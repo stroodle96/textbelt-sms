@@ -24,3 +24,19 @@ send_sms:
       selector:
         text:
           multiline: true
+
+start_conversation:
+  name: Start conversation
+  description: >-
+    Send an authorized sender a Home Assistant greeting for native SMS Assist.
+    Requires enabled native Assist, a public HTTPS callback, a reply-capable
+    account, consent and a provider-eligible U.S. recipient.
+  fields:
+    phone:
+      name: Phone number
+      description: An explicitly authorized phone number in international format.
+      required: true
+      example: "+1234567890"
+      selector:
+        text:
+          type: tel
