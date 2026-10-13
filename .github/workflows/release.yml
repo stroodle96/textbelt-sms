@@ -129,7 +129,7 @@ jobs:
         run: bash tests/smoke/run.sh
 
       - name: Run Hassfest validation
-        uses: home-assistant/actions/hassfest@a7c616ce81ccda50150bf1595786c71b1883fabb # master
+        uses: home-assistant/actions/hassfest@50baf3a307f87100cf550d4ae127746595030d5d # master
 
       - name: Run HACS validation
         env:
