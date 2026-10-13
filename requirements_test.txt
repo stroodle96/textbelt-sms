@@ -1,7 +1,7 @@
 -r requirements.txt
 
 homeassistant==2026.8.2
-pytest-homeassistant-custom-component==0.13.356
+pytest-homeassistant-custom-component==0.13.371
 pytest-cov==7.1.0
 
 # Imports and real INTENT pipeline tests (HA 2026.8.2 manifest versions).
